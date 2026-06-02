@@ -29,6 +29,7 @@ import { TIMEFRAMES } from "../config/timeframes";
 import type { Candle } from "../api/types";
 import type { UseChartDataResult } from "../hooks/useChartData";
 import type { Timeframe } from "../config/timeframes";
+import type { Position } from "../lib/types-demo";
 
 export interface ChartPaneProps {
   state: UseChartDataResult;
@@ -42,6 +43,8 @@ export interface ChartPaneProps {
   /** Timeframe label (e.g. "1H") for the chart-top OHLC legend */
   timeframe: Timeframe;
   onTimeframeChange: (tf: Timeframe) => void;
+  /** Open positions — drawn as entry + liq. price lines on the chart. */
+  positions?: Position[];
 }
 
 const VISIBLE_TF_STORAGE_KEY = "btcusdt-visible-timeframes";
@@ -69,6 +72,7 @@ export function ChartPane({
   exchange,
   timeframe,
   onTimeframeChange,
+  positions,
 }: ChartPaneProps) {
   const { data, loading, error, refetch } = state;
   const latest = data.length > 0 ? data[data.length - 1]! : null;
@@ -180,6 +184,7 @@ export function ChartPane({
           <CandleChart
             data={data}
             latestPrice={latest?.close}
+            positions={positions}
             onCrosshair={setHovered}
             scaleMode={scaleMode}
             tzId={tzId}

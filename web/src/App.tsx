@@ -163,6 +163,7 @@ function App() {
               exchange={EXCHANGE}
               timeframe={tf}
               onTimeframeChange={setTf}
+              positions={demo.state.positions}
             />
           </div>
           <SidePanel symbol={symbol} />

@@ -8,6 +8,8 @@
  * Props:
  *   data         — sorted-ascending OHLCV + time
  *   latestPrice  — optional dashed line marking the most recent close
+ *   positions    — open positions; each gets a solid entry line and a
+ *                  dashed liquidation line drawn on the series
  *   onCrosshair  — fired with the bar under the crosshair (null when off)
  *   scaleMode    — auto (linear+autoscale) | log | percent
  *   tzId         — IANA timezone for X-axis tick labels
@@ -16,6 +18,10 @@
  *
  * Auto-resizes via ResizeObserver. Cleans up on unmount. Always starts
  * in auto-fit (fit-content) state on load.
+ *
+ * Position lines: only rendered on the candlestick series. They sync
+ * off the `positions` prop — added when a new position appears, removed
+ * when it closes, and the lot is wiped on series swap.
  */
 
 import { useEffect, useRef } from "react";
@@ -32,6 +38,7 @@ import {
   type Time,
 } from "lightweight-charts";
 import type { Candle } from "../api/types";
+import { formatUsdt, liquidationPrice, type Position } from "../lib/types-demo";
 
 export type ScaleMode = "auto" | "log" | "percent";
 export type ChartType = "candle" | "line";
@@ -39,6 +46,8 @@ export type ChartType = "candle" | "line";
 export interface CandleChartProps {
   data: Candle[];
   latestPrice?: number;
+  /** Open positions — each gets an entry + liquidation line drawn. */
+  positions?: Position[];
   onCrosshair?: (bar: Candle | null) => void;
   /** Price scale mode: auto (linear+autoscale), log, or percent. */
   scaleMode?: ScaleMode;
@@ -54,6 +63,7 @@ export interface CandleChartProps {
 export function CandleChart({
   data,
   latestPrice,
+  positions,
   onCrosshair,
   scaleMode = "auto",
   tzId = "UTC",
@@ -70,6 +80,10 @@ export function CandleChart({
   // when chartType changes.
   const currentTypeRef = useRef<ChartType>(chartType);
   const priceLineRef = useRef<IPriceLine | null>(null);
+  // Per-position lines: position id -> { entry, liq } price lines.
+  const positionLinesRef = useRef<
+    Map<string, { entry: IPriceLine; liq: IPriceLine }>
+  >(new Map());
   // Keep latest data accessible inside the crosshair subscription without
   // re-binding the subscription on every data change.
   const dataRef = useRef<Candle[]>(data);
@@ -164,6 +178,7 @@ export function CandleChart({
 
     return () => {
       ro.disconnect();
+      positionLinesRef.current.clear();
       chart.remove();
       chartRef.current = null;
       seriesRef.current = null;
@@ -190,6 +205,9 @@ export function CandleChart({
     if (priceLineRef.current) {
       priceLineRef.current = null;
     }
+    // Position lines are tied to the old series — clear the map so
+    // the sync effect recreates them on the new series.
+    positionLinesRef.current.clear();
 
     if (chartType === "line") {
       const s = chart.addAreaSeries({
@@ -252,6 +270,75 @@ export function CandleChart({
       });
     }
   }, [latestPrice]);
+
+  // --- Position lines (entry + liquidation) ----------------------------
+  // Only on the candlestick view. Add new positions, remove closed
+  // ones, and clear everything when switching to line preview.
+  useEffect(() => {
+    const series = seriesRef.current;
+    if (!series) return;
+
+    const isCandle = currentTypeRef.current === "candle";
+    if (!isCandle) {
+      // Strip any lines that are still mapped.
+      for (const [, lines] of positionLinesRef.current) {
+        try {
+          series.removePriceLine(lines.entry);
+          series.removePriceLine(lines.liq);
+        } catch {
+          // ignore
+        }
+      }
+      positionLinesRef.current.clear();
+      return;
+    }
+
+    const current = positions ?? [];
+    const currentIds = new Set(current.map((p) => p.id));
+
+    // Remove lines for positions that closed.
+    for (const [id, lines] of positionLinesRef.current) {
+      if (!currentIds.has(id)) {
+        try {
+          series.removePriceLine(lines.entry);
+          series.removePriceLine(lines.liq);
+        } catch {
+          // ignore
+        }
+        positionLinesRef.current.delete(id);
+      }
+    }
+
+    // Add lines for new positions.
+    for (const pos of current) {
+      if (positionLinesRef.current.has(pos.id)) continue;
+
+      const entryColor = pos.side === "long" ? "#10b981" : "#ef4444";
+      const entryLine = series.createPriceLine({
+        price: pos.entryPrice,
+        color: entryColor,
+        lineWidth: 1,
+        lineStyle: 0, // solid
+        axisLabelVisible: true,
+        title: `${pos.side === "long" ? "Long" : "Short"} ${pos.size.toFixed(4)} @ ${formatUsdt(pos.entryPrice)}`,
+      });
+
+      const liq = liquidationPrice(pos);
+      const liqLine = series.createPriceLine({
+        price: liq,
+        color: "#f97316",
+        lineWidth: 1,
+        lineStyle: 2, // dashed
+        axisLabelVisible: true,
+        title: `Liq ${formatUsdt(liq)}`,
+      });
+
+      positionLinesRef.current.set(pos.id, {
+        entry: entryLine,
+        liq: liqLine,
+      });
+    }
+  }, [positions, chartType]);
 
   // --- Price scale mode (auto | log | percent) -------------------------
   useEffect(() => {
