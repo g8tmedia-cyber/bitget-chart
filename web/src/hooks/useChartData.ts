@@ -36,7 +36,7 @@ export function useChartData(symbol: string, tf: Timeframe): UseChartDataResult 
     const reqId = ++reqIdRef.current;
     setLoading(true);
     setError(null);
-    getCandles(symbol, tf.granularity, 200)
+    getCandles(symbol, tf.granularity, 1000)
       .then((candles) => {
         if (reqId !== reqIdRef.current) return;
         setData(candles);
