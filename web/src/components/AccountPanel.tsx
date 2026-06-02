@@ -4,17 +4,25 @@
  *
  *   Account                PnL
  *   ────────────────────────────
- *   USDT balance            0.00
- *   Wallet balance           0.00
+ *   USDT balance            0.00  ← editable (demo balance)
+ *   Wallet balance          0.00
  *   Available               0.00
  *   Total unrealized PnL    0.00
  *   ROI                    0.00%
  *   Trading bonuses         0.00
  *
- * Plus a "Reset demo" button (no-op for the layout-only phase).
+ * The USDT balance row is the demo's working balance — it feeds
+ * the "Max. open" readout in the leverage modal and the "Max"
+ * position size in the trading form. The user can edit it inline
+ * to any value.
  */
 
-export function AccountPanel() {
+export interface AccountPanelProps {
+  balance: number;
+  onBalanceChange: (balance: number) => void;
+}
+
+export function AccountPanel({ balance, onBalanceChange }: AccountPanelProps) {
   return (
     <div className="text-xs border-t border-zinc-800">
       <div className="flex items-center justify-between px-3 py-1.5">
@@ -25,9 +33,13 @@ export function AccountPanel() {
       </div>
 
       <div className="px-3 py-1 space-y-0.5 tabular-nums">
-        <Row label="USDT balance" value="0.00" />
-        <Row label="Wallet balance" value="0.00" />
-        <Row label="Available" value="0.00" />
+        <EditableBalanceRow
+          label="USDT balance"
+          value={balance}
+          onChange={onBalanceChange}
+        />
+        <Row label="Wallet balance" value={balance.toFixed(2)} />
+        <Row label="Available" value={balance.toFixed(2)} />
         <Row label="Total unrealized PnL" value="0.00" />
         <Row label="ROI" value="0.00%" />
         <Row label="Trading bonuses" value="0.00" />
@@ -58,6 +70,33 @@ function Row({ label, value }: { label: string; value: string }) {
     <div className="flex items-center justify-between">
       <span className="text-zinc-500">{label}</span>
       <span className="text-zinc-200">{value}</span>
+    </div>
+  );
+}
+
+function EditableBalanceRow({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-zinc-500">{label}</span>
+      <input
+        type="number"
+        value={value}
+        min={0}
+        step={100}
+        onChange={(e) => {
+          const n = Number(e.target.value);
+          if (!Number.isNaN(n) && n >= 0) onChange(n);
+        }}
+        className="w-28 bg-zinc-800 border border-zinc-700 rounded px-2 py-0.5 text-right text-zinc-200 text-xs tabular-nums focus:outline-none focus:border-zinc-500"
+      />
     </div>
   );
 }

@@ -40,7 +40,9 @@ const TF_STORAGE_KEY = "btcusdt-timeframe";
 const SCALE_MODE_STORAGE_KEY = "btcusdt-scale-mode";
 const TZ_ID_STORAGE_KEY = "btcusdt-tz-id";
 const SYMBOL_STORAGE_KEY = "btcusdt-symbol";
+const BALANCE_STORAGE_KEY = "btcusdt-demo-balance";
 const DEFAULT_TZ_ID = "UTC";
+const DEFAULT_BALANCE = 10_000;
 
 const VALID_SCALE_MODES: ScaleMode[] = ["auto", "log", "percent"];
 
@@ -52,6 +54,19 @@ function loadInitialSymbol(): string {
     // fall through
   }
   return DEFAULT_SYMBOL;
+}
+
+function loadInitialBalance(): number {
+  try {
+    const saved = localStorage.getItem(BALANCE_STORAGE_KEY);
+    if (saved) {
+      const n = Number(saved);
+      if (Number.isFinite(n) && n >= 0) return n;
+    }
+  } catch {
+    // fall through
+  }
+  return DEFAULT_BALANCE;
 }
 
 function loadInitialScaleMode(): ScaleMode {
@@ -94,6 +109,7 @@ function App() {
   });
   const [scaleMode, setScaleMode] = useState<ScaleMode>(loadInitialScaleMode);
   const [tzId, setTzId] = useState<string>(loadInitialTzId);
+  const [balance, setBalance] = useState<number>(loadInitialBalance);
   const state = useChartData(symbol, tf);
   const { ticker } = useTicker(symbol);
 
@@ -135,6 +151,14 @@ function App() {
     }
   }, [tzId]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(BALANCE_STORAGE_KEY, String(balance));
+    } catch {
+      // ignore
+    }
+  }, [balance]);
+
   // Live document title — same number as the chart's C.
   useEffect(() => {
     document.title = formatTitle(latestClose, symbol);
@@ -165,8 +189,15 @@ function App() {
           </div>
           <SidePanel symbol={symbol} />
           <aside className="relative rounded border border-zinc-800 bg-zinc-950 flex flex-col overflow-y-auto">
-            <TradingForm symbol={symbol} latestPrice={latestClose} />
-            <AccountPanel />
+            <TradingForm
+              symbol={symbol}
+              latestPrice={latestClose}
+              balance={balance}
+            />
+            <AccountPanel
+              balance={balance}
+              onBalanceChange={setBalance}
+            />
           </aside>
         </div>
 

@@ -2,10 +2,10 @@
  * TradingForm — visual-only order entry form. No engine behind it
  * yet. Mirrors the Bitget terminal's right-column form:
  *
- *   [Cross] [10x]   <- margin mode + leverage (single segmented row)
+ *   [Cross] [10x]   <- margin mode + leverage (single clickable row)
  *   Open           <- (Close removed; closes happen via Positions list)
  *   Limit | Market | Post only
- *   Available  0.0000 USDT
+ *   Available  X USDT
  *   Price  [____] [BBO]
  *   Quantity [____]  BTC⌄
  *   ●---●---●---●---●  0% 25% 50% 75% 100%
@@ -13,7 +13,10 @@
  *   ☐ TP/SL
  *   Time in force [GTC ⌄]
  *   [ Open long ]  [ Open short ]
- *   Max 0.0000 BTC | 0.0000 BTC
+ *   Max X BTC | X BTC
+ *
+ * The leverage button opens <LeverageModal> (centered modal with
+ * number input + slider, mirrors Bitget's "Adjust leverage" UI).
  *
  * The Open long / Open short buttons log a placeholder for now —
  * the actual demo engine lands in a later commit.
@@ -22,6 +25,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getContractInfo } from "../api/bitget";
 import type { PublicTrade } from "../api/bitget";
+import { LeverageModal } from "./LeverageModal";
 
 export interface TradingFormProps {
   symbol: string;
@@ -29,14 +33,14 @@ export interface TradingFormProps {
   latestPrice: number | null;
   /** Latest trade object, used to display "live" price next to BBO. */
   latestTrade?: PublicTrade | null;
+  /** Demo balance in USDT. */
+  balance: number;
 }
 
 type OrderType = "limit" | "market" | "post_only";
 type Tif = "GTC" | "IOC" | "FOK";
 
-const LEVERAGE_TIERS = [1, 5, 10, 20, 25, 50, 75, 100, 125, 150] as const;
-
-export function TradingForm({ symbol, latestPrice }: TradingFormProps) {
+export function TradingForm({ symbol, latestPrice, balance }: TradingFormProps) {
   const [leverage, setLeverage] = useState<number>(10);
   const [orderType, setOrderType] = useState<OrderType>("limit");
   const [price, setPrice] = useState<string>("");
@@ -44,30 +48,30 @@ export function TradingForm({ symbol, latestPrice }: TradingFormProps) {
   const [quantityPct, setQuantityPct] = useState<number>(0);
   const [tpSl, setTpSl] = useState(false);
   const [tif, setTif] = useState<Tif>("GTC");
+  const [minLever, setMinLever] = useState<number>(1);
   const [maxLever, setMaxLever] = useState<number>(150);
+  const [leverageModalOpen, setLeverageModalOpen] = useState(false);
 
-  // Fetch the per-symbol max leverage whenever the symbol changes.
+  // Fetch the per-symbol min/max leverage whenever the symbol changes.
   useEffect(() => {
     let cancelled = false;
     getContractInfo(symbol)
       .then((info) => {
         if (cancelled) return;
+        if (info?.minLever) setMinLever(info.minLever);
         if (info?.maxLever) {
           setMaxLever(info.maxLever);
-          // Clamp current leverage to the new max.
           setLeverage((cur) => Math.min(cur, info.maxLever!));
         }
       })
       .catch(() => {
-        // Ignore — default to 150x.
+        // Ignore — default to 1–150x.
       });
     return () => {
       cancelled = true;
     };
   }, [symbol]);
 
-  // Auto-fill price with the latest trade price when the user
-  // hasn't typed anything yet and we have a fresh tick.
   const bbo = latestPrice;
   const cost = useMemo(() => {
     const q = parseFloat(quantity);
@@ -76,14 +80,21 @@ export function TradingForm({ symbol, latestPrice }: TradingFormProps) {
     return q * p;
   }, [quantity, price, bbo, orderType]);
 
+  // Max BTC the user can buy at the current leverage, given the
+  // demo balance and the latest price. Both sides of the form
+  // (long and short) get the same value since the demo treats them
+  // symmetrically.
+  const maxBtc = useMemo(() => {
+    if (!bbo || bbo <= 0 || leverage <= 0 || balance <= 0) return 0;
+    return (balance * leverage) / bbo;
+  }, [balance, leverage, bbo]);
+
   const handleBbo = () => {
     if (bbo != null) setPrice(bbo.toString());
   };
 
   const setQtyPct = (pct: number) => {
     setQuantityPct(pct);
-    // Pretend balance is $10,000 for the visual.
-    const balance = 10_000;
     const notional = (balance * leverage * pct) / 100;
     if (bbo && bbo > 0) {
       setQuantity((notional / bbo).toFixed(4));
@@ -115,22 +126,13 @@ export function TradingForm({ symbol, latestPrice }: TradingFormProps) {
               max {maxLever}x
             </span>
           </div>
-          <div className="flex flex-wrap gap-1">
-            {LEVERAGE_TIERS.filter((l) => l <= maxLever).map((l) => (
-              <button
-                key={l}
-                onClick={() => setLeverage(l)}
-                className={[
-                  "px-1.5 py-0.5 rounded text-[11px] transition-colors",
-                  l === leverage
-                    ? "bg-zinc-700 text-zinc-100"
-                    : "text-zinc-500 hover:text-zinc-200",
-                ].join(" ")}
-              >
-                {l}x
-              </button>
-            ))}
-          </div>
+          {/* Single clickable button that opens the leverage modal */}
+          <button
+            onClick={() => setLeverageModalOpen(true)}
+            className="w-full text-left px-3 py-1.5 rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-100 text-sm font-medium transition-colors"
+          >
+            {leverage}x
+          </button>
         </div>
       </div>
 
@@ -175,7 +177,9 @@ export function TradingForm({ symbol, latestPrice }: TradingFormProps) {
       <div className="px-3 py-2 border-b border-zinc-800 flex items-center justify-between text-[11px]">
         <span className="text-zinc-500">Available</span>
         <div className="flex items-center gap-1.5">
-          <span className="text-zinc-200 tabular-nums">0.0000 USDT</span>
+          <span className="text-zinc-200 tabular-nums">
+            {balance.toLocaleString(undefined, { maximumFractionDigits: 4 })} USDT
+          </span>
           <button
             className="text-zinc-500 hover:text-zinc-200"
             title="Transfer"
@@ -305,9 +309,22 @@ export function TradingForm({ symbol, latestPrice }: TradingFormProps) {
 
       {/* Max per side */}
       <div className="px-3 pb-3 flex items-center justify-between text-[10px] text-zinc-500">
-        <span>Max: 0.0000 BTC</span>
-        <span>Max: 0.0000 BTC</span>
+        <span>Max: {maxBtc.toFixed(4)} BTC</span>
+        <span>Max: {maxBtc.toFixed(4)} BTC</span>
       </div>
+
+      {/* Leverage modal */}
+      <LeverageModal
+        open={leverageModalOpen}
+        onClose={() => setLeverageModalOpen(false)}
+        onConfirm={(l) => setLeverage(l)}
+        symbol={symbol}
+        marginMode="Cross"
+        initialLeverage={leverage}
+        minLever={minLever}
+        maxLever={maxLever}
+        balance={balance}
+      />
     </div>
   );
 }
