@@ -20,7 +20,7 @@ import {
   createChart,
   PriceScaleMode,
   TickMarkType,
-  type CandlestickData,
+  type AreaData,
   type IChartApi,
   type IPriceLine,
   type ISeriesApi,
@@ -54,7 +54,7 @@ export function CandleChart({
 }: CandleChartProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const candleSeriesRef = useRef<ISeriesApi<"Area"> | null>(null);
   const priceLineRef = useRef<IPriceLine | null>(null);
   // Keep latest data accessible inside the crosshair subscription without
   // re-binding the subscription on every data change.
@@ -104,13 +104,11 @@ export function CandleChart({
     chartRef.current = chart;
     onChartApiReady?.(chart);
 
-    const candleSeries = chart.addCandlestickSeries({
-      upColor: "#22c55e",
-      downColor: "#ef4444",
-      borderUpColor: "#22c55e",
-      borderDownColor: "#ef4444",
-      wickUpColor: "#22c55e",
-      wickDownColor: "#ef4444",
+    const candleSeries = chart.addAreaSeries({
+      lineColor: "#a1a1aa",
+      topColor: "rgba(161, 161, 170, 0.25)",
+      bottomColor: "rgba(161, 161, 170, 0)",
+      lineWidth: 2,
       priceLineColor: "#71717a",
       priceLineStyle: 2,
     });
@@ -184,14 +182,11 @@ export function CandleChart({
       series.setData([]);
       return;
     }
-    const cd: CandlestickData[] = data.map((c) => ({
+    const ld: AreaData[] = data.map((c) => ({
       time: c.time as Time,
-      open: c.open,
-      high: c.high,
-      low: c.low,
-      close: c.close,
+      value: c.close,
     }));
-    series.setData(cd);
+    series.setData(ld);
     // The chart's default `setData` behavior auto-fits the time scale, so
     // the chart starts in the "Auto" state on every load. No restore.
   }, [data]);
