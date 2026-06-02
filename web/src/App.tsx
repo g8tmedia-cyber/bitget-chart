@@ -187,11 +187,15 @@ function App() {
   }, [symbol]);
 
   return (
-    <div className="h-screen flex flex-col bg-zinc-950 text-zinc-100 overflow-hidden">
+    <div className="min-h-screen flex flex-col bg-zinc-950 text-zinc-100">
       <TopBar symbol={symbol} onSymbolChange={setSymbol} ticker={ticker} />
-      <main className="flex-1 p-3 flex flex-col gap-3 min-h-0">
-        <div className="flex-1 grid grid-cols-[1fr_280px_340px] gap-3 min-h-0">
-          <div className="relative min-h-0 rounded border border-zinc-800 bg-zinc-950 overflow-hidden">
+      <main className="flex-1 p-3 flex flex-col gap-3">
+        {/* Main 3-column row: chart / order-book-and-trades / trading
+            form + account. Each column is at least 600px tall so the
+            chart is usable and the 15-level order book is fully
+            visible. Grows to fill the viewport if there's room. */}
+        <div className="grid grid-cols-[minmax(0,1fr)_300px_360px] gap-3 min-h-[600px] flex-1">
+          <div className="relative rounded border border-zinc-800 bg-zinc-950 overflow-hidden">
             <ChartPane
               state={state}
               scaleMode={scaleMode}
@@ -205,12 +209,15 @@ function App() {
             />
           </div>
           <SidePanel symbol={symbol} />
-          <aside className="relative min-h-0 rounded border border-zinc-800 bg-zinc-950 flex flex-col overflow-hidden">
+          <aside className="relative rounded border border-zinc-800 bg-zinc-950 flex flex-col overflow-hidden">
             <TradingForm symbol={symbol} latestPrice={latestPrice} />
             <AccountPanel />
           </aside>
         </div>
-        <div className="h-[260px] shrink-0">
+        {/* Bottom panel: full-width tabs for Positions / Open orders /
+            History. Compact 240px so it doesn't dominate, but the
+            internal scroll lets the lists grow. */}
+        <div className="h-[240px] shrink-0">
           <BottomPanel />
         </div>
       </main>
