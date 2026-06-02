@@ -149,14 +149,18 @@ export function ChartPane({
           visibleTimeframes={visibleTimeframes}
           onChevronClick={() => setIntervalOpen((o) => !o)}
           disabled={state.loading && state.data.length === 0}
-        />
-        <TimeframeDropdown
-          open={intervalOpen}
-          visibleTimeframes={visibleTimeframes}
-          onToggleVisibility={toggleVisibility}
-          selected={timeframe}
-          onClose={() => setIntervalOpen(false)}
-        />
+        >
+          {/* Dropdown lives inside the selector's `relative` container
+              so `right-0 top-full` lands directly under the chevron,
+              not at the right edge of the chart. */}
+          <TimeframeDropdown
+            open={intervalOpen}
+            visibleTimeframes={visibleTimeframes}
+            onToggleVisibility={toggleVisibility}
+            selected={timeframe}
+            onClose={() => setIntervalOpen(false)}
+          />
+        </TimeframeSelector>
       </div>
 
       {/* The chart itself + overlays (fills the rest) */}

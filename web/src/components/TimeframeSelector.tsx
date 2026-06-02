@@ -6,14 +6,18 @@
  *                                              not part of any timeframe
  *
  * Only renders the timeframes whose label is in `visibleTimeframes`.
- * The chevron on the right is a separate clickable element that opens
- * the visibility-manager dropdown.
+ * The chevron on the right is a separate clickable element.
+ *
+ * The root container is `position: relative` so any children passed
+ * in (e.g. the visibility-manager dropdown) can anchor themselves to
+ * the chevron via `absolute right-0 top-full`.
  *
  * Clicking a timeframe button selects it (candlestick view). Clicking
  * the chevron opens the dropdown (visibility manager). The two
  * triggers are independent.
  */
 
+import type { ReactNode } from "react";
 import { TIMEFRAMES, type Timeframe } from "../config/timeframes";
 
 export interface TimeframeSelectorProps {
@@ -30,6 +34,12 @@ export interface TimeframeSelectorProps {
    */
   onChevronClick?: () => void;
   disabled?: boolean;
+  /**
+   * Optional children rendered inside the same `relative` container
+   * as the chevron, so an absolute-positioned popover can anchor to
+   * the chevron (use `absolute right-0 top-full`).
+   */
+  children?: ReactNode;
 }
 
 export function TimeframeSelector({
@@ -38,11 +48,12 @@ export function TimeframeSelector({
   visibleTimeframes,
   onChevronClick,
   disabled,
+  children,
 }: TimeframeSelectorProps) {
   const visible = TIMEFRAMES.filter((tf) => visibleTimeframes.has(tf.label));
 
   return (
-    <div className="flex items-center gap-1 text-xs select-none">
+    <div className="relative flex items-center gap-1 text-xs select-none">
       {visible.length === 0 ? (
         <span className="text-zinc-500 italic px-1">
           (empty — open the picker)
@@ -94,6 +105,12 @@ export function TimeframeSelector({
           </svg>
         </button>
       )}
+
+      {/* Children (e.g. the visibility-manager dropdown) anchor
+          themselves to this `relative` container, so positioning
+          `absolute right-0 top-full` lands directly under the
+          chevron. */}
+      {children}
     </div>
   );
 }
