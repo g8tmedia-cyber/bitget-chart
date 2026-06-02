@@ -13,7 +13,7 @@ import type { IChartApi } from "lightweight-charts";
 import { CandleChart } from "./CandleChart";
 import { CandleLegend } from "./CandleLegend";
 import { ChartScaleMode, type ScaleMode } from "./ChartScaleMode";
-import { ChartClock } from "./ChartClock";
+import { TimezoneSelect } from "./TimezoneSelect";
 import type { Candle } from "../api/types";
 import type { UseChartDataResult } from "../hooks/useChartData";
 
@@ -21,16 +21,24 @@ export interface ChartPaneProps {
   state: UseChartDataResult;
   scaleMode: ScaleMode;
   onScaleModeChange: (mode: ScaleMode) => void;
-  timezone?: string;
-  onTimezoneChange?: (tz: string) => void;
+  tzOffset: number;
+  onTzOffsetChange: (offset: number) => void;
+  /** Symbol + exchange labels for the chart-top OHLC legend */
+  symbol: string;
+  exchange: string;
+  /** Timeframe label (e.g. "1H") for the chart-top OHLC legend */
+  timeframeLabel: string;
 }
 
 export function ChartPane({
   state,
   scaleMode,
   onScaleModeChange,
-  timezone,
-  onTimezoneChange,
+  tzOffset,
+  onTzOffsetChange,
+  symbol,
+  exchange,
+  timeframeLabel,
 }: ChartPaneProps) {
   const { data, loading, error, refetch } = state;
   const latest = data.length > 0 ? data[data.length - 1]! : null;
@@ -70,6 +78,7 @@ export function ChartPane({
           latestPrice={latest?.close}
           onCrosshair={setHovered}
           scaleMode={scaleMode}
+          tzOffset={tzOffset}
           onChartApiReady={(c) => {
             chartApiRef.current = c;
           }}
@@ -80,16 +89,15 @@ export function ChartPane({
         <CandleLegend
           hovered={hovered}
           latest={latest}
-          isLive={hovered == null}
+          symbol={symbol}
+          exchange={exchange}
+          timeframeLabel={timeframeLabel}
         />
       </div>
 
       {/* Bottom-right controls (matches the TradingView image layout) */}
       <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1.5">
-        <ChartClock
-          timezone={timezone as never}
-          onTimezoneChange={onTimezoneChange as never}
-        />
+        <TimezoneSelect offset={tzOffset} onChange={onTzOffsetChange} />
         <ChartScaleMode value={scaleMode} onChange={handleScaleModeChange} />
       </div>
     </div>

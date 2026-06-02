@@ -19,6 +19,7 @@ import { useEffect, useRef } from "react";
 import {
   createChart,
   PriceScaleMode,
+  TickMarkType,
   type CandlestickData,
   type IChartApi,
   type IPriceLine,
@@ -36,6 +37,8 @@ export interface CandleChartProps {
   onCrosshair?: (bar: Candle | null) => void;
   /** Price scale mode: auto (linear+autoscale), log, or percent. */
   scaleMode?: ScaleMode;
+  /** UTC offset in hours (e.g. -4, 0, 8). 0 = UTC. */
+  tzOffset?: number;
   /** Called once when the chart instance is created. Used for imperative
    *  actions (e.g. fitContent) from outside the component. */
   onChartApiReady?: (chart: IChartApi) => void;
@@ -46,6 +49,7 @@ export function CandleChart({
   latestPrice,
   onCrosshair,
   scaleMode = "auto",
+  tzOffset = 0,
   onChartApiReady,
 }: CandleChartProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -83,6 +87,12 @@ export function CandleChart({
         rightOffset: 50,
         // Keep a bit of room on the left so the oldest bar isn't flush either.
         shiftVisibleRangeOnNewBar: true,
+        // Render X-axis tick labels in the user-selected UTC offset
+        // (instead of the browser-local default). The library has no
+        // first-class "timezone" option, so we provide a custom formatter
+        // via the v5 tickMarkFormatter API. Updated below when tzOffset
+        // changes; the create-time value is just an initial.
+        tickMarkFormatter: makeTickMarkFormatter(tzOffset),
       },
       crosshair: {
         mode: 1,
@@ -221,5 +231,75 @@ export function CandleChart({
     });
   }, [scaleMode]);
 
+  // --- Timezone (X-axis tick labels) --------------------------------------
+  // Lightweight-charts has no first-class timezone option. We provide a
+  // tickMarkFormatter that formats each tick in the user-selected UTC
+  // offset, using Intl.DateTimeFormat with a fixed-offset POSIX zone
+  // (sign convention reversed: Etc/GMT-8 = UTC+8). Return null to fall
+  // back to the library default for any unhandled tickMarkType.
+  //
+  // Cast to `any` because v5's TimeScaleOptions (in some d.ts versions)
+  // doesn't expose tickMarkFormatter on the runtime's DeepPartial
+  // type even though the docs list it as a valid option. The runtime
+  // accepts it just fine.
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    chart.timeScale().applyOptions({
+      tickMarkFormatter: makeTickMarkFormatter(tzOffset),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+  }, [tzOffset]);
+
   return <div ref={containerRef} className="w-full h-full" />;
+}
+
+/**
+ * Build a tick-mark formatter that renders the X-axis labels in the
+ * given UTC offset. Uses the POSIX fixed-offset zone names
+ * (Etc/GMT±N) so DST is irrelevant.
+ */
+function makeTickMarkFormatter(
+  offsetHours: number,
+): (time: Time, tickMarkType: TickMarkType, locale: string) => string | null {
+  // POSIX sign convention: Etc/GMT-8 = UTC+8, Etc/GMT+5 = UTC-5.
+  // Etc/GMT0 is "UTC" itself (cleaner name than "Etc/GMT").
+  const tzString =
+    offsetHours === 0
+      ? "UTC"
+      : `Etc/GMT${offsetHours > 0 ? "-" : "+"}${Math.abs(offsetHours)}`;
+
+  return (time, tickMarkType, locale) => {
+    const date = new Date(Number(time) * 1000);
+    const opts: Intl.DateTimeFormatOptions | null = (() => {
+      switch (tickMarkType) {
+        case TickMarkType.Year:
+          return { year: "numeric" };
+        case TickMarkType.Month:
+          return { month: "short" };
+        case TickMarkType.DayOfMonth:
+          return { day: "2-digit", month: "short" };
+        case TickMarkType.Time:
+          return {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          };
+        case TickMarkType.TimeWithSeconds:
+          return {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: false,
+          };
+        default:
+          return null;
+      }
+    })();
+    if (!opts) return null;
+    return new Intl.DateTimeFormat(locale || "en-GB", {
+      timeZone: tzString,
+      ...opts,
+    }).format(date);
+  };
 }

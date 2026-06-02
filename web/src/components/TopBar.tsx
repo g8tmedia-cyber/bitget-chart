@@ -10,7 +10,6 @@
  * picker and watchlist — they don't do anything yet.
  */
 
-import { useEffect, useState } from "react";
 import type { Ticker } from "../api/types";
 
 export interface TopBarProps {
@@ -88,19 +87,11 @@ export function TopBar({ symbol, ticker }: TopBarProps) {
           value={ticker ? humanVolume(ticker.quoteVolume24h) : "—"}
         />
         <Stat
-          label="Funding rate/Countdown (8h)"
+          label="Funding rate"
           value={
             ticker
               ? `${(ticker.fundingRate * 100).toFixed(4)}%`
               : "—"
-          }
-          trailing={
-            ticker ? (
-              <>
-                <span className="text-zinc-500 mx-1">/</span>
-                <FundingCountdown nextFundingTimeMs={ticker.nextFundingTime} />
-              </>
-            ) : null
           }
           valueClassName="text-emerald-400"
         />
@@ -165,23 +156,6 @@ function StarIcon() {
       <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
     </svg>
   );
-}
-
-function FundingCountdown({ nextFundingTimeMs }: { nextFundingTimeMs: number }) {
-  // Tick every second so the countdown stays live.
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(id);
-  }, []);
-
-  const remaining = Math.max(0, nextFundingTimeMs - now);
-  const h = Math.floor(remaining / 3_600_000);
-  const m = Math.floor((remaining % 3_600_000) / 60_000);
-  const s = Math.floor((remaining % 60_000) / 1000);
-  const text = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-
-  return <span className="tabular-nums">{text}</span>;
 }
 
 // --- Helpers (also used in CandleLegend — duplicate; lift later) -----------
