@@ -33,6 +33,7 @@ import {
 } from "./config/timeframes";
 import type { ScaleMode } from "./components/ChartScaleMode";
 import { formatPrice } from "./lib/format";
+import { shouldFillLimitOrder } from "./lib/types-demo";
 
 const DEFAULT_SYMBOL = "BTCUSDT";
 const EXCHANGE = "Bitget";
@@ -142,6 +143,25 @@ function App() {
     document.title = formatTitle(latestClose, symbol);
   }, [latestClose, symbol]);
 
+  // Limit-order trigger: on every candle tick, check whether the
+  // bar's range includes any open limit price. If so, fill the
+  // order. Skipped if there are no orders or no candle data yet.
+  useEffect(() => {
+    if (state.data.length === 0) return;
+    const latest = state.data[state.data.length - 1];
+    if (!latest) return;
+    for (const order of demo.state.openOrders) {
+      if (order.symbol !== symbol) continue;
+      if (shouldFillLimitOrder(order, latest) && order.price != null) {
+        demo.fillLimitOrder(order.id, order.price);
+      }
+    }
+    // We only want to re-run when candle data or symbol changes.
+    // demo.fillLimitOrder is stable; demo.state is read fresh inside
+    // the loop so we don't need it in deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.data, symbol]);
+
   return (
     <div className="min-h-screen flex flex-col bg-zinc-950 text-zinc-100">
       <TopBar symbol={symbol} onSymbolChange={setSymbol} ticker={ticker} />
@@ -173,6 +193,7 @@ function App() {
               latestPrice={latestClose}
               balance={demo.state.balance}
               onPlaceMarketOrder={demo.placeMarketOrder}
+              onPlaceLimitOrder={demo.placeLimitOrder}
             />
             <AccountPanel
               balance={demo.state.balance}
@@ -188,11 +209,17 @@ function App() {
         <div className="h-[320px] shrink-0">
           <BottomPanel
             positions={demo.state.positions}
+            openOrders={demo.state.openOrders}
             history={demo.state.history}
             markPrice={latestClose}
             symbol={symbol}
             onClosePosition={(id) => demo.closePosition(id, latestClose ?? 0)}
-            onReset={demo.reset}
+            onCancelOrder={demo.cancelOrder}
+            onReset={() => {
+              if (window.confirm("Reset the demo? This wipes all positions, orders, and history.")) {
+                demo.reset();
+              }
+            }}
           />
         </div>
       </main>

@@ -103,3 +103,21 @@ export function formatUsdt(n: number, maxFractionDigits: number = 2): string {
     maximumFractionDigits: maxFractionDigits,
   });
 }
+
+/**
+ * Decide whether a limit order should fill on this candle. Pure
+ * function — exports so the trigger can be unit-tested.
+ *
+ * A limit order fills when the bar's range includes the limit
+ * price. For a long limit at P, the price must come down to P
+ * (low <= P) while having been at or above P at some point
+ * (high >= P) — i.e. the bar spans P. Same condition for shorts
+ * (the bar must span P from below).
+ */
+export function shouldFillLimitOrder(
+  order: OpenOrder,
+  candle: { low: number; high: number },
+): boolean {
+  if (order.type !== "limit" || order.price == null) return false;
+  return candle.low <= order.price && candle.high >= order.price;
+}

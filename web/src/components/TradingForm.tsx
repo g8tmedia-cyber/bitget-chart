@@ -22,7 +22,10 @@ import { useEffect, useMemo, useState } from "react";
 import { getContractInfo } from "../api/bitget";
 import type { PublicTrade } from "../api/bitget";
 import { LeverageModal } from "./LeverageModal";
-import type { PlaceMarketOrderParams } from "../hooks/useDemoAccount";
+import type {
+  PlaceLimitOrderParams,
+  PlaceMarketOrderParams,
+} from "../hooks/useDemoAccount";
 
 export interface TradingFormProps {
   symbol: string;
@@ -34,6 +37,8 @@ export interface TradingFormProps {
   balance: number;
   /** Called when the user clicks Open long/short on a market order. */
   onPlaceMarketOrder: (params: PlaceMarketOrderParams) => void;
+  /** Called when the user clicks Open long/short on a limit order. */
+  onPlaceLimitOrder: (params: PlaceLimitOrderParams) => void;
 }
 
 type OrderType = "limit" | "market";
@@ -44,6 +49,7 @@ export function TradingForm({
   latestPrice,
   balance,
   onPlaceMarketOrder,
+  onPlaceLimitOrder,
 }: TradingFormProps) {
   const [leverage, setLeverage] = useState<number>(10);
   const [orderType, setOrderType] = useState<OrderType>("limit");
@@ -119,18 +125,22 @@ export function TradingForm({
         leverage,
         markPrice: bbo,
       });
-      // Clear the quantity so the next order starts fresh.
-      setQuantity("");
-      setQuantityPct(0);
-      return;
+    } else {
+      // Limit order — require an explicit price.
+      const limitPrice = parseFloat(price);
+      if (!isFinite(limitPrice) || limitPrice <= 0) return;
+      onPlaceLimitOrder({
+        symbol,
+        side,
+        size: q,
+        leverage,
+        price: limitPrice,
+        tif,
+      });
     }
-
-    // Limit order in part 2 — for now, log a placeholder so the
-    // form is still usable while we build the limit-order trigger.
-    // eslint-disable-next-line no-console
-    console.log(
-      `[trading form] LIMIT ${side} ${q} ${symbol} @ ${price} (${leverage}x) — coming in part 2`,
-    );
+    // Clear the quantity so the next order starts fresh.
+    setQuantity("");
+    setQuantityPct(0);
   };
 
   return (

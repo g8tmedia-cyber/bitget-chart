@@ -17,6 +17,7 @@ import {
   formatUsdt,
   liquidationPrice,
   type Fill,
+  type OpenOrder,
   type Position,
   unrealizedPnl,
   unrealizedRoiPct,
@@ -33,21 +34,25 @@ const TABS: { id: Tab; label: string }[] = [
 
 export interface BottomPanelProps {
   positions: Position[];
+  openOrders: OpenOrder[];
   history: Fill[];
   /** Latest chart close — used for live PnL on the Positions tab. */
   markPrice: number | null;
   /** Current symbol, used as a default filter for history. */
   symbol: string;
   onClosePosition: (positionId: string) => void;
+  onCancelOrder: (orderId: string) => void;
   onReset: () => void;
 }
 
 export function BottomPanel({
   positions,
+  openOrders,
   history,
   markPrice,
   symbol,
   onClosePosition,
+  onCancelOrder,
   onReset,
 }: BottomPanelProps) {
   const [tab, setTab] = useState<Tab>("positions");
@@ -57,6 +62,9 @@ export function BottomPanel({
   const filteredHistory = showCurrent
     ? history.filter((f) => f.symbol === symbol)
     : history;
+  const filteredOpenOrders = showCurrent
+    ? openOrders.filter((o) => o.symbol === symbol)
+    : openOrders;
 
   // A fill is a "close" → it counts as a position history entry.
   const closedFills = filteredHistory.filter((f) => f.note === "close");
@@ -81,7 +89,7 @@ export function BottomPanel({
                   : "text-zinc-500 hover:text-zinc-200",
               ].join(" ")}
             >
-              {t.label} ({countFor(t.id, positions, history, filteredHistory)})
+              {t.label} ({countFor(t.id, positions, filteredOpenOrders, filteredHistory)})
             </button>
           );
         })}
@@ -134,10 +142,7 @@ export function BottomPanel({
           />
         )}
         {tab === "open_orders" && (
-          <EmptyState
-            title="No open orders"
-            body="Limit orders you place will appear here until they're filled or cancelled."
-          />
+          <OpenOrdersTable orders={filteredOpenOrders} onCancel={onCancelOrder} />
         )}
         {tab === "order_history" && (
           <OrderHistoryTable fills={openOrAddFills} />
@@ -255,6 +260,80 @@ function PositionsTable({
   );
 }
 
+function OpenOrdersTable({
+  orders,
+  onCancel,
+}: {
+  orders: OpenOrder[];
+  onCancel: (id: string) => void;
+}) {
+  if (orders.length === 0) {
+    return (
+      <EmptyState
+        title="No open orders"
+        body="Limit orders you place will appear here until they're filled or cancelled."
+      />
+    );
+  }
+  return (
+    <table className="w-full text-[11px] font-mono tabular-nums">
+      <thead>
+        <tr className="text-zinc-500 uppercase text-[10px] tracking-wider border-b border-zinc-800">
+          <th className="text-left px-3 py-1.5">Time</th>
+          <th className="text-left px-3 py-1.5">Symbol</th>
+          <th className="text-left px-3 py-1.5">Side</th>
+          <th className="text-left px-3 py-1.5">Type</th>
+          <th className="text-right px-3 py-1.5">Price</th>
+          <th className="text-right px-3 py-1.5">Size</th>
+          <th className="text-right px-3 py-1.5">TIF</th>
+          <th className="text-right px-3 py-1.5"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {orders.map((o) => (
+          <tr
+            key={o.id}
+            className="border-b border-zinc-800/50 hover:bg-zinc-900/40"
+          >
+            <td className="px-3 py-1.5 text-zinc-500">
+              {formatTime(o.createdAt)}
+            </td>
+            <td className="px-3 py-1.5 text-zinc-200">{o.symbol}</td>
+            <td
+              className={[
+                "px-3 py-1.5",
+                o.side === "long" ? "text-emerald-400" : "text-red-400",
+              ].join(" ")}
+            >
+              {o.side === "long" ? "Long" : "Short"} {o.leverage}x
+            </td>
+            <td className="px-3 py-1.5 text-zinc-400 uppercase text-[10px]">
+              {o.type}
+            </td>
+            <td className="px-3 py-1.5 text-right text-zinc-200">
+              {o.price != null ? formatUsdt(o.price) : "—"}
+            </td>
+            <td className="px-3 py-1.5 text-right text-zinc-300">
+              {o.size.toFixed(4)}
+            </td>
+            <td className="px-3 py-1.5 text-right text-zinc-400">
+              {o.tif}
+            </td>
+            <td className="px-3 py-1.5 text-right">
+              <button
+                onClick={() => onCancel(o.id)}
+                className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[10px] transition-colors"
+              >
+                Cancel
+              </button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 function OrderHistoryTable({ fills }: { fills: Fill[] }) {
   if (fills.length === 0) {
     return (
@@ -271,9 +350,11 @@ function OrderHistoryTable({ fills }: { fills: Fill[] }) {
           <th className="text-left px-3 py-1.5">Time</th>
           <th className="text-left px-3 py-1.5">Symbol</th>
           <th className="text-left px-3 py-1.5">Side</th>
+          <th className="text-left px-3 py-1.5">Type</th>
           <th className="text-right px-3 py-1.5">Size</th>
           <th className="text-right px-3 py-1.5">Price</th>
           <th className="text-right px-3 py-1.5">Value</th>
+          <th className="text-right px-3 py-1.5">Fee</th>
         </tr>
       </thead>
       <tbody>
@@ -297,6 +378,9 @@ function OrderHistoryTable({ fills }: { fills: Fill[] }) {
               >
                 {f.side === "long" ? "Long" : "Short"}
               </td>
+              <td className="px-3 py-1.5 text-zinc-400 uppercase text-[10px]">
+                {f.type}
+              </td>
               <td className="px-3 py-1.5 text-right text-zinc-300">
                 {f.size.toFixed(4)}
               </td>
@@ -305,6 +389,9 @@ function OrderHistoryTable({ fills }: { fills: Fill[] }) {
               </td>
               <td className="px-3 py-1.5 text-right text-zinc-200">
                 {formatUsdt(f.size * f.price)}
+              </td>
+              <td className="px-3 py-1.5 text-right text-zinc-500">
+                {formatUsdt(f.fee)}
               </td>
             </tr>
           ))}
@@ -330,8 +417,8 @@ function PositionHistoryTable({ fills }: { fills: Fill[] }) {
           <th className="text-left px-3 py-1.5">Symbol</th>
           <th className="text-left px-3 py-1.5">Side</th>
           <th className="text-right px-3 py-1.5">Size</th>
-          <th className="text-right px-3 py-1.5">Entry</th>
           <th className="text-right px-3 py-1.5">Exit</th>
+          <th className="text-right px-3 py-1.5">Fees</th>
           <th className="text-right px-3 py-1.5">PnL</th>
         </tr>
       </thead>
@@ -340,9 +427,6 @@ function PositionHistoryTable({ fills }: { fills: Fill[] }) {
           .slice()
           .reverse()
           .map((f) => {
-            // For closed positions, PnL was realized at the exit
-            // price. We don't have a stored "entry" here — just show
-            // the fill's price (exit) and the PnL.
             const up = f.realizedPnl >= 0;
             return (
               <tr
@@ -364,9 +448,11 @@ function PositionHistoryTable({ fills }: { fills: Fill[] }) {
                 <td className="px-3 py-1.5 text-right text-zinc-300">
                   {f.size.toFixed(4)}
                 </td>
-                <td className="px-3 py-1.5 text-right text-zinc-500">—</td>
                 <td className="px-3 py-1.5 text-right text-zinc-300">
                   {formatUsdt(f.price)}
+                </td>
+                <td className="px-3 py-1.5 text-right text-zinc-500">
+                  {formatUsdt(f.fee)}
                 </td>
                 <td
                   className={[
@@ -399,14 +485,14 @@ function EmptyState({ title, body }: { title: string; body: string }) {
 function countFor(
   tab: Tab,
   positions: Position[],
-  history: Fill[],
+  openOrders: OpenOrder[],
   filteredHistory: Fill[],
 ): number {
   switch (tab) {
     case "positions":
       return positions.length;
     case "open_orders":
-      return 0; // part 2
+      return openOrders.length;
     case "order_history":
       return filteredHistory.filter(
         (f) => f.note === "open" || f.note === "add",
@@ -414,7 +500,7 @@ function countFor(
     case "position_history":
       return filteredHistory.filter((f) => f.note === "close").length;
     default:
-      return history.length;
+      return 0;
   }
 }
 
