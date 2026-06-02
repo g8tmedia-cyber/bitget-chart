@@ -19,7 +19,7 @@ const BASE = "https://api.bitget.com";
 const PRODUCT_TYPE = "USDT-FUTURES" as const;
 
 /** How many candles to fetch per request. Bitget caps `limit` at 1000 for `/candles`. */
-const DEFAULT_CANDLE_LIMIT = 200;
+const DEFAULT_CANDLE_LIMIT = 1000;
 
 class BitgetApiError extends Error {
   constructor(
