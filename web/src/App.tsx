@@ -3,18 +3,17 @@
  *
  * Layout (top to bottom):
  *   - Top bar           : <TopBar> symbol picker + price + 24h stats
- *   - 3-col main row    :
- *       - Left          : chart
- *       - Middle (280px): <SidePanel> (Order book | Market trades tabs)
- *       - Right (340px) : <TradingForm> + <AccountPanel>
- *   - Bottom panel      : <BottomPanel> (Positions / Open orders / …)
+ *   - 3-col main row    : chart | order book/trades | trading form
+ *   - Bottom panel      : Positions / Open orders / History
  *
- * Document title: live price from the trade stream, throttled to
- * ~10Hz. Format: `12345.67 | BTCUSDT`.
+ * Browser-tab title: `${chart's last close} | ${symbol}`. The price
+ * comes from the chart's own candle data (state.data), not a
+ * separate trade stream, so the tab and the chart's C value are
+ * guaranteed to be the same number. Format is the shared
+ * `formatPrice` so decimal precision matches the chart legend.
  *
- * `latestPrice` is a throttled 10Hz state, updated from the same
- * TradesStream that drives the title. The TradingForm uses it for
- * the BBO quick-set button and the cost preview.
+ * `latestClose` is also passed to the TradingForm as the BBO
+ * quick-set price (same source, same formatter).
  */
 
 import { useEffect, useState } from "react";
@@ -26,13 +25,13 @@ import { AccountPanel } from "./components/AccountPanel";
 import { BottomPanel } from "./components/BottomPanel";
 import { useChartData } from "./hooks/useChartData";
 import { useTicker } from "./hooks/useTicker";
-import { TradesStream } from "./api/trades-ws";
 import {
   DEFAULT_TIMEFRAME,
   timeframeByLabel,
   type Timeframe,
 } from "./config/timeframes";
 import type { ScaleMode } from "./components/ChartScaleMode";
+import { formatPrice } from "./lib/format";
 
 const DEFAULT_SYMBOL = "BTCUSDT";
 const EXCHANGE = "Bitget";
@@ -42,10 +41,6 @@ const SCALE_MODE_STORAGE_KEY = "btcusdt-scale-mode";
 const TZ_ID_STORAGE_KEY = "btcusdt-tz-id";
 const SYMBOL_STORAGE_KEY = "btcusdt-symbol";
 const DEFAULT_TZ_ID = "UTC";
-
-// Throttle window for browser-tab title updates and the trading
-// form's BBO. 100ms = 10Hz, well below human perception.
-const TICK_THROTTLE_MS = 100;
 
 const VALID_SCALE_MODES: ScaleMode[] = ["auto", "log", "percent"];
 
@@ -83,10 +78,7 @@ function loadInitialTzId(): string {
 
 function formatTitle(price: number | null, symbol: string): string {
   if (price == null) return `${symbol} | ${EXCHANGE}`;
-  const formatted = price.toLocaleString(undefined, {
-    maximumFractionDigits: 2,
-  });
-  return `${formatted} | ${symbol}`;
+  return `${formatPrice(price)} | ${symbol}`;
 }
 
 function App() {
@@ -102,9 +94,14 @@ function App() {
   });
   const [scaleMode, setScaleMode] = useState<ScaleMode>(loadInitialScaleMode);
   const [tzId, setTzId] = useState<string>(loadInitialTzId);
-  const [latestPrice, setLatestPrice] = useState<number | null>(null);
   const state = useChartData(symbol, tf);
   const { ticker } = useTicker(symbol);
+
+  // The chart's last close — single source of truth for both the
+  // browser-tab price and the trading form's BBO. Pulled from the
+  // candle data, so it matches the chart's C value exactly.
+  const latestClose =
+    state.data.length > 0 ? state.data[state.data.length - 1]!.close : null;
 
   useEffect(() => {
     try {
@@ -138,53 +135,10 @@ function App() {
     }
   }, [tzId]);
 
-  // Live document title + throttled latestPrice for the trading form.
-  // Subscribes directly to the trade stream (each trade = a price
-  // tick) and throttles document.title + setLatestPrice writes to
-  // TICK_THROTTLE_MS. No App re-renders between throttles.
+  // Live document title — same number as the chart's C.
   useEffect(() => {
-    document.title = formatTitle(null, symbol);
-    setLatestPrice(null);
-
-    let timer: number | null = null;
-    let pendingPrice: number | null = null;
-    let lastUpdate = 0;
-
-    const stream = new TradesStream({
-      symbol,
-      onTrades: (trades) => {
-        if (trades.length === 0) return;
-        const price = trades[0].price;
-        pendingPrice = price;
-        const now = performance.now();
-        const elapsed = now - lastUpdate;
-        if (elapsed >= TICK_THROTTLE_MS) {
-          document.title = formatTitle(price, symbol);
-          setLatestPrice(price);
-          lastUpdate = now;
-          pendingPrice = null;
-        } else if (timer == null) {
-          timer = window.setTimeout(() => {
-            timer = null;
-            if (pendingPrice != null) {
-              document.title = formatTitle(pendingPrice, symbol);
-              setLatestPrice(pendingPrice);
-              lastUpdate = performance.now();
-              pendingPrice = null;
-            }
-          }, TICK_THROTTLE_MS - elapsed);
-        }
-      },
-    });
-    stream.start();
-    return () => {
-      stream.stop();
-      if (timer != null) {
-        window.clearTimeout(timer);
-        timer = null;
-      }
-    };
-  }, [symbol]);
+    document.title = formatTitle(latestClose, symbol);
+  }, [latestClose, symbol]);
 
   return (
     <div className="min-h-screen flex flex-col bg-zinc-950 text-zinc-100">
@@ -211,7 +165,7 @@ function App() {
           </div>
           <SidePanel symbol={symbol} />
           <aside className="relative rounded border border-zinc-800 bg-zinc-950 flex flex-col overflow-y-auto">
-            <TradingForm symbol={symbol} latestPrice={latestPrice} />
+            <TradingForm symbol={symbol} latestPrice={latestClose} />
             <AccountPanel />
           </aside>
         </div>

@@ -14,6 +14,7 @@
  */
 
 import type { Candle } from "../api/types";
+import { formatPrice } from "../lib/format";
 
 export interface CandleLegendProps {
   /** Currently hovered bar (null when crosshair is off-canvas) */
@@ -57,13 +58,13 @@ export function CandleLegend({
       <span className="text-zinc-400">{exchange}</span>
 
       <span className="text-zinc-600 ml-1">O</span>
-      <span className="text-zinc-100">{fmt(c.open)}</span>
+      <span className="text-zinc-100">{formatPrice(c.open)}</span>
       <span className="text-zinc-600 ml-1">H</span>
-      <span className="text-emerald-400">{fmt(c.high)}</span>
+      <span className="text-emerald-400">{formatPrice(c.high)}</span>
       <span className="text-zinc-600 ml-1">L</span>
-      <span className="text-red-400">{fmt(c.low)}</span>
+      <span className="text-red-400">{formatPrice(c.low)}</span>
       <span className="text-zinc-600 ml-1">C</span>
-      <span className={closeColor}>{fmt(c.close)}</span>
+      <span className={closeColor}>{formatPrice(c.close)}</span>
 
       <span className={closeColor}>
         {changeSign}
@@ -72,10 +73,4 @@ export function CandleLegend({
       </span>
     </div>
   );
-}
-
-function fmt(n: number): string {
-  if (n >= 1000) return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  if (n >= 1) return n.toLocaleString(undefined, { maximumFractionDigits: 4 });
-  return n.toLocaleString(undefined, { maximumFractionDigits: 6 });
 }
