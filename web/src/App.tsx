@@ -6,6 +6,9 @@
  *   - Body grid    : 2 columns
  *       - Left     : chart with timeframe picker in its top header
  *       - Right    : <SidePanel> (Order book / Market trades tabs)
+ *
+ * Document title: live price from the trade stream, throttled to
+ * ~10Hz so we don't thrash the title bar. Format: `12345.67 | BTCUSDT`.
  */
 
 import { useEffect, useState } from "react";
@@ -14,6 +17,7 @@ import { SidePanel } from "./components/SidePanel";
 import { TopBar } from "./components/TopBar";
 import { useChartData } from "./hooks/useChartData";
 import { useTicker } from "./hooks/useTicker";
+import { TradesStream } from "./api/trades-ws";
 import {
   DEFAULT_TIMEFRAME,
   timeframeByLabel,
@@ -23,12 +27,16 @@ import type { ScaleMode } from "./components/ChartScaleMode";
 
 const SYMBOL = "BTCUSDT";
 const EXCHANGE = "Bitget";
-const DEFAULT_TITLE = "BTCUSDT Chart — Bitget";
+const DEFAULT_TITLE = `${SYMBOL} | Bitget`;
 
 const TF_STORAGE_KEY = "btcusdt-timeframe";
 const SCALE_MODE_STORAGE_KEY = "btcusdt-scale-mode";
 const TZ_ID_STORAGE_KEY = "btcusdt-tz-id";
 const DEFAULT_TZ_ID = "UTC";
+
+// Throttle window for browser-tab title updates. 100ms = 10Hz, well
+// below human perception but enough to avoid document.title churn.
+const TITLE_THROTTLE_MS = 100;
 
 const VALID_SCALE_MODES: ScaleMode[] = ["auto", "log", "percent"];
 
@@ -52,6 +60,13 @@ function loadInitialTzId(): string {
     // fall through
   }
   return DEFAULT_TZ_ID;
+}
+
+function formatTitle(price: number): string {
+  const formatted = price.toLocaleString(undefined, {
+    maximumFractionDigits: 2,
+  });
+  return `${formatted} | ${SYMBOL}`;
 }
 
 function App() {
@@ -93,18 +108,50 @@ function App() {
     }
   }, [tzId]);
 
-  // Live document title — `$PRICE · SYMBOL` so the price is visible
-  // in the browser tab even when the page is in the background.
+  // Live document title — `price | symbol`. Subscribes directly to
+  // the trade stream (each trade is a price tick) and throttles
+  // document.title writes to TITLE_THROTTLE_MS. No App re-renders
+  // are triggered; the title is written as a side effect.
   useEffect(() => {
-    if (!ticker) {
-      document.title = DEFAULT_TITLE;
-      return;
-    }
-    const price = ticker.lastPrice.toLocaleString(undefined, {
-      maximumFractionDigits: 2,
+    document.title = DEFAULT_TITLE;
+
+    let timer: number | null = null;
+    let pendingPrice: number | null = null;
+    let lastUpdate = 0;
+
+    const stream = new TradesStream({
+      symbol: SYMBOL,
+      onTrades: (trades) => {
+        if (trades.length === 0) return;
+        const price = trades[0].price;
+        pendingPrice = price;
+        const now = performance.now();
+        const elapsed = now - lastUpdate;
+        if (elapsed >= TITLE_THROTTLE_MS) {
+          document.title = formatTitle(price);
+          lastUpdate = now;
+          pendingPrice = null;
+        } else if (timer == null) {
+          timer = window.setTimeout(() => {
+            timer = null;
+            if (pendingPrice != null) {
+              document.title = formatTitle(pendingPrice);
+              lastUpdate = performance.now();
+              pendingPrice = null;
+            }
+          }, TITLE_THROTTLE_MS - elapsed);
+        }
+      },
     });
-    document.title = `$${price}  ·  ${SYMBOL}`;
-  }, [ticker]);
+    stream.start();
+    return () => {
+      stream.stop();
+      if (timer != null) {
+        window.clearTimeout(timer);
+        timer = null;
+      }
+    };
+  }, []);
 
   return (
     <div className="h-screen flex flex-col bg-zinc-950 text-zinc-100 overflow-hidden">
