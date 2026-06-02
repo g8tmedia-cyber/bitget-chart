@@ -13,6 +13,7 @@ import type { IChartApi } from "lightweight-charts";
 import { CandleChart } from "./CandleChart";
 import { CandleLegend } from "./CandleLegend";
 import { ChartScaleMode, type ScaleMode } from "./ChartScaleMode";
+import { TimeframeSelector } from "./TimeframeSelector";
 import { TimeframeDropdown } from "./TimeframeDropdown";
 import { TimezoneSelect } from "./TimezoneSelect";
 import type { Candle } from "../api/types";
@@ -49,6 +50,7 @@ export function ChartPane({
   const [hovered, setHovered] = useState<Candle | null>(null);
   const fading = loading && data.length > 0;
   const chartApiRef = useRef<IChartApi | null>(null);
+  const [intervalOpen, setIntervalOpen] = useState(false);
 
   // "auto" mode snaps the chart back to fit all data and ensures the
   // price axis auto-scales to the visible range. Other modes just
@@ -65,18 +67,29 @@ export function ChartPane({
 
   return (
     <div className="relative w-full h-full">
-      {/* Top header: just the "Time" trigger (clicking opens the
-          interval selector popover). Plain — no inline row of TFs. */}
-      <div className="flex items-center gap-2 px-2 py-1 border-b border-zinc-800">
-        <TimeframeDropdown
+      {/* Top header: a "Time" section label + a row of timeframe
+          buttons. The chevron on the last entry opens the full
+          interval selector popover. */}
+      <div className="flex items-center gap-3 px-2 py-1 border-b border-zinc-800 relative">
+        <span className="text-[10px] uppercase tracking-wider text-zinc-500">
+          Time
+        </span>
+        <TimeframeSelector
           value={timeframe}
           onChange={onTimeframeChange}
+          onChevronClick={() => setIntervalOpen((o) => !o)}
           disabled={state.loading && state.data.length === 0}
+        />
+        <TimeframeDropdown
+          open={intervalOpen}
+          value={timeframe}
+          onChange={onTimeframeChange}
+          onClose={() => setIntervalOpen(false)}
         />
       </div>
 
       {/* The chart itself + overlays (fills the rest) */}
-      <div className="absolute inset-x-0 bottom-0 top-[29px]">
+      <div className="absolute inset-x-0 bottom-0 top-[33px]">
         {loading && data.length === 0 && <ChartSkeleton />}
         {error && data.length === 0 && (
           <ChartError message={error} onRetry={refetch} />
