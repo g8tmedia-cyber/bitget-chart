@@ -132,6 +132,90 @@ export async function getSymbols(): Promise<SymbolInfo[]> {
 }
 
 // ---------------------------------------------------------------------------
+// All-tickers listing (for the symbol picker)
+// ---------------------------------------------------------------------------
+
+/**
+ * A single row in the all-tickers response from
+ * `/api/v2/mix/market/tickers`. Includes the fields we need to
+ * drive the symbol-picker dropdown (price, 24h change, 24h volume).
+ * The actual wire response has more fields (bid/ask sizes,
+ * funding rate, etc.) — we model only what the picker needs.
+ */
+export interface FuturesTicker {
+  symbol: string; // e.g. "BTCUSDT"
+  /** Base coin derived from the symbol (the wire response doesn't
+   *  include `baseCoin` for tickers, only for contracts). */
+  baseCoin: string; // e.g. "BTC"
+  quoteCoin: "USDT";
+  lastPr: number;
+  /** Signed 24h change in percent, e.g. -1.234 means -1.234% */
+  change24h: number;
+  /** 24h base-coin volume (e.g. BTC) */
+  baseVolume: number;
+  /** 24h quote-coin volume (e.g. USDT) — used for the default sort */
+  quoteVolume: number;
+  high24h: number;
+  low24h: number;
+  markPrice: number;
+  indexPrice: number;
+  fundingRate: number;
+}
+
+/**
+ * Get all USDT-M Futures PERPETUAL tickers in one call. Filters out
+ * dated futures (which have a non-null `deliveryTime` on the wire)
+ * so the picker only shows tradeable perpetuals. Returns sorted by
+ * 24h quote volume descending (the picker's default order).
+ *
+ * Note: this hits `/api/v2/mix/market/tickers?productType=USDT-FUTURES`
+ * which returns 500+ rows. The picker should call this on open, not
+ * on every render.
+ */
+export async function getUsdtFuturesPerpetualTickers(): Promise<FuturesTicker[]> {
+  type RawRow = {
+    symbol: string;
+    lastPr: string;
+    high24h?: string;
+    low24h?: string;
+    change24h: string;
+    markPrice?: string;
+    indexPrice?: string;
+    fundingRate?: string;
+    baseVolume: string;
+    quoteVolume: string;
+    /** null for perpetuals, a timestamp string for dated futures */
+    deliveryTime?: string | null;
+  };
+  const rows = await request<RawRow[]>(
+    "/api/v2/mix/market/tickers",
+    { productType: PRODUCT_TYPE },
+  );
+  return rows
+    .filter((r) => r.deliveryTime == null || r.deliveryTime === "")
+    .map<FuturesTicker>((r) => {
+      const baseCoin = r.symbol.endsWith("USDT")
+        ? r.symbol.slice(0, -4)
+        : r.symbol;
+      return {
+        symbol: r.symbol,
+        baseCoin,
+        quoteCoin: "USDT",
+        lastPr: Number(r.lastPr),
+        change24h: Number(r.change24h),
+        baseVolume: Number(r.baseVolume),
+        quoteVolume: Number(r.quoteVolume),
+        high24h: Number(r.high24h ?? 0),
+        low24h: Number(r.low24h ?? 0),
+        markPrice: Number(r.markPrice ?? 0),
+        indexPrice: Number(r.indexPrice ?? 0),
+        fundingRate: Number(r.fundingRate ?? 0),
+      };
+    })
+    .sort((a, b) => b.quoteVolume - a.quoteVolume);
+}
+
+// ---------------------------------------------------------------------------
 // Order book
 // ---------------------------------------------------------------------------
 
