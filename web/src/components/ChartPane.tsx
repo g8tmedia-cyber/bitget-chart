@@ -52,6 +52,13 @@ export function ChartPane({
   const chartApiRef = useRef<IChartApi | null>(null);
   const [intervalOpen, setIntervalOpen] = useState(false);
 
+  // While the interval-selector popover is open, the chart switches
+  // to a line preview. Closing the popover (selection, Escape, or
+  // click-outside) reverts the chart to candlesticks.
+  const effectiveChartType: "candle" | "line" = intervalOpen
+    ? "line"
+    : "candle";
+
   // "auto" mode snaps the chart back to fit all data and ensures the
   // price axis auto-scales to the visible range. Other modes just
   // switch the price-axis mode and leave the user's zoom alone.
@@ -68,12 +75,16 @@ export function ChartPane({
   return (
     <div className="relative w-full h-full">
       {/* Top header: a "Time" section label + a row of timeframe
-          buttons. The chevron on the last entry opens the full
-          interval selector popover. */}
+          buttons. The "Time" label and the chevron on the last entry
+          both open the full interval selector popover. While the
+          popover is open, the chart switches to a line preview. */}
       <div className="flex items-center gap-3 px-2 py-1 border-b border-zinc-800 relative">
-        <span className="text-[10px] uppercase tracking-wider text-zinc-500">
+        <button
+          onClick={() => setIntervalOpen((o) => !o)}
+          className="text-[10px] uppercase tracking-wider text-zinc-500 hover:text-zinc-200 transition-colors"
+        >
           Time
-        </span>
+        </button>
         <TimeframeSelector
           value={timeframe}
           onChange={onTimeframeChange}
@@ -108,6 +119,7 @@ export function ChartPane({
             onCrosshair={setHovered}
             scaleMode={scaleMode}
             tzId={tzId}
+            chartType={effectiveChartType}
             onChartApiReady={(c) => {
               chartApiRef.current = c;
             }}
