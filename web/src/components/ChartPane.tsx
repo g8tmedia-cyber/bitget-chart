@@ -21,8 +21,8 @@ export interface ChartPaneProps {
   state: UseChartDataResult;
   scaleMode: ScaleMode;
   onScaleModeChange: (mode: ScaleMode) => void;
-  tzOffset: number;
-  onTzOffsetChange: (offset: number) => void;
+  tzId: string;
+  onTzIdChange: (tzId: string) => void;
   /** Symbol + exchange labels for the chart-top OHLC legend */
   symbol: string;
   exchange: string;
@@ -34,8 +34,8 @@ export function ChartPane({
   state,
   scaleMode,
   onScaleModeChange,
-  tzOffset,
-  onTzOffsetChange,
+  tzId,
+  onTzIdChange,
   symbol,
   exchange,
   timeframeLabel,
@@ -78,7 +78,7 @@ export function ChartPane({
           latestPrice={latest?.close}
           onCrosshair={setHovered}
           scaleMode={scaleMode}
-          tzOffset={tzOffset}
+          tzId={tzId}
           onChartApiReady={(c) => {
             chartApiRef.current = c;
           }}
@@ -97,7 +97,7 @@ export function ChartPane({
 
       {/* Bottom-right controls (matches the TradingView image layout) */}
       <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1.5">
-        <TimezoneSelect offset={tzOffset} onChange={onTzOffsetChange} />
+        <TimezoneSelect tzId={tzId} onChange={onTzIdChange} />
         <ChartScaleMode value={scaleMode} onChange={handleScaleModeChange} />
       </div>
     </div>

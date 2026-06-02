@@ -30,7 +30,8 @@ const DEFAULT_TITLE = "BTCUSDT Chart — Bitget";
 
 const TF_STORAGE_KEY = "btcusdt-timeframe";
 const SCALE_MODE_STORAGE_KEY = "btcusdt-scale-mode";
-const TZ_OFFSET_STORAGE_KEY = "btcusdt-tz-offset";
+const TZ_ID_STORAGE_KEY = "btcusdt-tz-id";
+const DEFAULT_TZ_ID = "UTC";
 
 const VALID_SCALE_MODES: ScaleMode[] = ["auto", "log", "percent"];
 
@@ -46,16 +47,14 @@ function loadInitialScaleMode(): ScaleMode {
   return "auto";
 }
 
-function loadInitialTzOffset(): number {
+function loadInitialTzId(): string {
   try {
-    const raw = localStorage.getItem(TZ_OFFSET_STORAGE_KEY);
-    if (raw === null) return 0;
-    const n = Number.parseInt(raw, 10);
-    if (Number.isFinite(n) && n >= -12 && n <= 14) return n;
+    const saved = localStorage.getItem(TZ_ID_STORAGE_KEY);
+    if (saved && saved.length > 0) return saved;
   } catch {
     // fall through
   }
-  return 0;
+  return DEFAULT_TZ_ID;
 }
 
 function App() {
@@ -69,7 +68,7 @@ function App() {
     return DEFAULT_TIMEFRAME;
   });
   const [scaleMode, setScaleMode] = useState<ScaleMode>(loadInitialScaleMode);
-  const [tzOffset, setTzOffset] = useState<number>(loadInitialTzOffset);
+  const [tzId, setTzId] = useState<string>(loadInitialTzId);
   const state = useChartData(SYMBOL, tf);
   const { ticker } = useTicker(SYMBOL);
 
@@ -91,11 +90,11 @@ function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(TZ_OFFSET_STORAGE_KEY, String(tzOffset));
+      localStorage.setItem(TZ_ID_STORAGE_KEY, tzId);
     } catch {
       // ignore
     }
-  }, [tzOffset]);
+  }, [tzId]);
 
   // Live document title — `$PRICE · SYMBOL` so the price is visible
   // in the browser tab even when the page is in the background.
@@ -127,8 +126,8 @@ function App() {
               state={state}
               scaleMode={scaleMode}
               onScaleModeChange={setScaleMode}
-              tzOffset={tzOffset}
-              onTzOffsetChange={setTzOffset}
+              tzId={tzId}
+              onTzIdChange={setTzId}
               symbol={SYMBOL}
               exchange={EXCHANGE}
               timeframeLabel={tf.label}

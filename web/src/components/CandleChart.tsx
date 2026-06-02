@@ -37,8 +37,8 @@ export interface CandleChartProps {
   onCrosshair?: (bar: Candle | null) => void;
   /** Price scale mode: auto (linear+autoscale), log, or percent. */
   scaleMode?: ScaleMode;
-  /** UTC offset in hours (e.g. -4, 0, 8). 0 = UTC. */
-  tzOffset?: number;
+  /** IANA timezone id (e.g. "America/New_York") or "UTC". */
+  tzId?: string;
   /** Called once when the chart instance is created. Used for imperative
    *  actions (e.g. fitContent) from outside the component. */
   onChartApiReady?: (chart: IChartApi) => void;
@@ -49,7 +49,7 @@ export function CandleChart({
   latestPrice,
   onCrosshair,
   scaleMode = "auto",
-  tzOffset = 0,
+  tzId = "UTC",
   onChartApiReady,
 }: CandleChartProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -87,12 +87,12 @@ export function CandleChart({
         rightOffset: 50,
         // Keep a bit of room on the left so the oldest bar isn't flush either.
         shiftVisibleRangeOnNewBar: true,
-        // Render X-axis tick labels in the user-selected UTC offset
+        // Render X-axis tick labels in the user-selected timezone
         // (instead of the browser-local default). The library has no
         // first-class "timezone" option, so we provide a custom formatter
-        // via the v5 tickMarkFormatter API. Updated below when tzOffset
+        // via the v5 tickMarkFormatter API. Updated below when tzId
         // changes; the create-time value is just an initial.
-        tickMarkFormatter: makeTickMarkFormatter(tzOffset),
+        tickMarkFormatter: makeTickMarkFormatter(tzId),
       },
       crosshair: {
         mode: 1,
@@ -233,10 +233,10 @@ export function CandleChart({
 
   // --- Timezone (X-axis tick labels) --------------------------------------
   // Lightweight-charts has no first-class timezone option. We provide a
-  // tickMarkFormatter that formats each tick in the user-selected UTC
-  // offset, using Intl.DateTimeFormat with a fixed-offset POSIX zone
-  // (sign convention reversed: Etc/GMT-8 = UTC+8). Return null to fall
-  // back to the library default for any unhandled tickMarkType.
+  // tickMarkFormatter that formats each tick in the user-selected
+  // IANA timezone, using Intl.DateTimeFormat. DST is handled
+  // automatically by the browser. Return null to fall back to the
+  // library default for any unhandled tickMarkType.
   //
   // Cast to `any` because v5's TimeScaleOptions (in some d.ts versions)
   // doesn't expose tickMarkFormatter on the runtime's DeepPartial
@@ -246,29 +246,21 @@ export function CandleChart({
     const chart = chartRef.current;
     if (!chart) return;
     chart.timeScale().applyOptions({
-      tickMarkFormatter: makeTickMarkFormatter(tzOffset),
+      tickMarkFormatter: makeTickMarkFormatter(tzId),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
-  }, [tzOffset]);
+  }, [tzId]);
 
   return <div ref={containerRef} className="w-full h-full" />;
 }
 
 /**
  * Build a tick-mark formatter that renders the X-axis labels in the
- * given UTC offset. Uses the POSIX fixed-offset zone names
- * (Etc/GMT±N) so DST is irrelevant.
+ * given IANA timezone. DST is handled by the browser.
  */
 function makeTickMarkFormatter(
-  offsetHours: number,
+  tzId: string,
 ): (time: Time, tickMarkType: TickMarkType, locale: string) => string | null {
-  // POSIX sign convention: Etc/GMT-8 = UTC+8, Etc/GMT+5 = UTC-5.
-  // Etc/GMT0 is "UTC" itself (cleaner name than "Etc/GMT").
-  const tzString =
-    offsetHours === 0
-      ? "UTC"
-      : `Etc/GMT${offsetHours > 0 ? "-" : "+"}${Math.abs(offsetHours)}`;
-
   return (time, tickMarkType, locale) => {
     const date = new Date(Number(time) * 1000);
     const opts: Intl.DateTimeFormatOptions | null = (() => {
@@ -298,7 +290,7 @@ function makeTickMarkFormatter(
     })();
     if (!opts) return null;
     return new Intl.DateTimeFormat(locale || "en-GB", {
-      timeZone: tzString,
+      timeZone: tzId,
       ...opts,
     }).format(date);
   };
