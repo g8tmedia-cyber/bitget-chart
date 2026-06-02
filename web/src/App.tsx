@@ -187,15 +187,18 @@ function App() {
   }, [symbol]);
 
   return (
-    <div className="min-h-screen flex flex-col bg-zinc-950 text-zinc-100">
+    <div className="h-screen flex flex-col bg-zinc-950 text-zinc-100 overflow-hidden">
       <TopBar symbol={symbol} onSymbolChange={setSymbol} ticker={ticker} />
-      <main className="flex-1 p-3 flex flex-col gap-3">
-        {/* Main 3-column row: chart / order-book-and-trades / trading
-            form + account. Each column is at least 600px tall so the
-            chart is usable and the 15-level order book is fully
-            visible. Grows to fill the viewport if there's room. */}
-        <div className="grid grid-cols-[minmax(0,1fr)_300px_360px] gap-3 min-h-[600px] flex-1">
-          <div className="relative rounded border border-zinc-800 bg-zinc-950 overflow-hidden">
+      <main className="flex-1 p-3 min-h-0">
+        {/* 2-row × 3-column grid:
+            - Chart spans both rows in column 1 (full height)
+            - Order book / market trades in column 2 row 1
+            - Bottom panel (Positions / Open orders / History) in
+              column 2 row 2 — to the left of the right panel
+            - Trading form + account spans both rows in column 3 */}
+        <div className="h-full grid grid-cols-[minmax(0,1fr)_300px_360px] grid-rows-[1fr_300px] gap-3">
+          {/* Chart: column 1, full height */}
+          <div className="row-span-2 relative rounded border border-zinc-800 bg-zinc-950 overflow-hidden">
             <ChartPane
               state={state}
               scaleMode={scaleMode}
@@ -208,17 +211,23 @@ function App() {
               onTimeframeChange={setTf}
             />
           </div>
-          <SidePanel symbol={symbol} />
-          <aside className="relative rounded border border-zinc-800 bg-zinc-950 flex flex-col overflow-hidden">
+
+          {/* Order book + market trades: column 2, row 1 */}
+          <div className="col-start-2 row-start-1 h-full">
+            <SidePanel symbol={symbol} />
+          </div>
+
+          {/* Bottom panel: column 2, row 2 — sits to the left of
+              the right panel, below the order book */}
+          <div className="col-start-2 row-start-2 h-full">
+            <BottomPanel />
+          </div>
+
+          {/* Right panel: column 3, full height */}
+          <aside className="col-start-3 row-span-2 relative rounded border border-zinc-800 bg-zinc-950 flex flex-col overflow-y-auto">
             <TradingForm symbol={symbol} latestPrice={latestPrice} />
             <AccountPanel />
           </aside>
-        </div>
-        {/* Bottom panel: full-width tabs for Positions / Open orders /
-            History. Compact 240px so it doesn't dominate, but the
-            internal scroll lets the lists grow. */}
-        <div className="h-[240px] shrink-0">
-          <BottomPanel />
         </div>
       </main>
     </div>
