@@ -1,38 +1,35 @@
 /**
- * TimeframeDropdown — controlled popover for selecting an interval.
+ * TimeframeDropdown — controlled popover for managing which timeframes
+ * are visible in the chart's row.
  *
- * Renders no UI when `open` is false (the parent controls visibility).
- * The parent usually wires it to a chevron click on a row of inline
- * timeframe buttons. Click-outside / Escape closes via `onClose`.
+ * Each entry has a visibility indicator:
+ *   ✓  currently visible in the row
+ *   +  currently hidden
  *
- * Layout (mirrors the reference image):
- *   Select interval                                  Edit
- *   ┌──────┬─────────────────────────────────────────┐
- *   │ Time │  1m   3m   5m  15m                       │
- *   │  5m  │  30m  1D   3D  1W                       │
- *   │ 15m  │  1M                                     │
- *   │ ...  │                                         │
- *   └──────┴─────────────────────────────────────────┘
+ * Clicking an entry toggles its visibility. This popover does NOT
+ * change the selected timeframe — the user selects a timeframe by
+ * clicking one of the row buttons in the chart header.
  */
 
 import { useEffect, useRef } from "react";
-import {
-  TIMEFRAMES,
-  TIME_QUICK_PICKS,
-  type Timeframe,
-} from "../config/timeframes";
+import { TIMEFRAMES, type Timeframe } from "../config/timeframes";
 
 export interface TimeframeDropdownProps {
   open: boolean;
-  value: Timeframe;
-  onChange: (tf: Timeframe) => void;
+  /** Set of labels currently visible in the row. */
+  visibleTimeframes: Set<string>;
+  /** Toggle a label in/out of the visible set. */
+  onToggleVisibility: (label: string) => void;
+  /** Currently selected timeframe (highlighted in the list). */
+  selected: Timeframe;
   onClose: () => void;
 }
 
 export function TimeframeDropdown({
   open,
-  value,
-  onChange,
+  visibleTimeframes,
+  onToggleVisibility,
+  selected,
   onClose,
 }: TimeframeDropdownProps) {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -57,27 +54,18 @@ export function TimeframeDropdown({
 
   if (!open) return null;
 
-  const choose = (tf: Timeframe) => {
-    onChange(tf);
-    onClose();
-  };
-
-  const quickPicks = TIME_QUICK_PICKS.map((label) =>
-    TIMEFRAMES.find((t) => t.label === label),
-  ).filter((t): t is Timeframe => t != null);
-
   return (
     <div
       ref={ref}
-      className="absolute left-0 top-full mt-1 z-30 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl w-[420px]"
+      className="absolute right-0 top-full mt-1 z-30 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl w-[260px]"
     >
-      <header className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
+      <header className="flex items-center justify-between px-3 py-2 border-b border-zinc-800">
         <span className="text-sm font-medium text-zinc-100">
-          Select interval
+          Visible timeframes
         </span>
         <button
           onClick={() => {
-            /* placeholder for future "manage favorites" panel */
+            /* placeholder for future custom-timeframe editor */
           }}
           className="text-sm text-cyan-400 hover:text-cyan-300 transition-colors"
         >
@@ -85,50 +73,41 @@ export function TimeframeDropdown({
         </button>
       </header>
 
-      <div className="flex p-3 gap-3">
-        {/* Left "Time" quick-pick column */}
-        <div className="w-16 shrink-0">
-          <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5 px-1">
-            Time
-          </div>
-          <div className="flex flex-col gap-1">
-            {quickPicks.map((tf) => (
-              <button
-                key={tf.label}
-                onClick={() => choose(tf)}
+      <div className="p-2 max-h-80 overflow-auto">
+        {TIMEFRAMES.map((tf) => {
+          const isVisible = visibleTimeframes.has(tf.label);
+          const isSelected = tf.label === selected.label;
+          return (
+            <button
+              key={tf.label}
+              onClick={() => onToggleVisibility(tf.label)}
+              className={[
+                "w-full text-left px-3 py-1.5 text-sm rounded-md transition-colors flex items-center gap-2",
+                isSelected
+                  ? "bg-zinc-700/60 text-zinc-100"
+                  : "text-zinc-300 hover:bg-zinc-800",
+              ].join(" ")}
+            >
+              <span
+                aria-hidden
                 className={[
-                  "px-2 py-1.5 text-xs rounded-md text-center transition-colors",
-                  tf.label === value.label
-                    ? "bg-zinc-700 text-zinc-100 font-medium"
-                    : "text-zinc-300 hover:bg-zinc-800",
+                  "w-4 inline-flex items-center justify-center text-xs",
+                  isVisible ? "text-emerald-400" : "text-zinc-600",
                 ].join(" ")}
               >
+                {isVisible ? "✓" : "+"}
+              </span>
+              <span className={isVisible ? "" : "text-zinc-500"}>
                 {tf.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Right grid: all timeframes in 4 columns */}
-        <div className="flex-1 grid grid-cols-4 gap-1.5 auto-rows-min">
-          {TIMEFRAMES.map((tf) => {
-            const active = tf.label === value.label;
-            return (
-              <button
-                key={tf.label}
-                onClick={() => choose(tf)}
-                className={[
-                  "px-2 py-2 text-xs rounded-md text-center transition-colors",
+              </span>
+              {isSelected && (
+                <span className="ml-auto text-[10px] text-cyan-400 uppercase tracking-wider">
                   active
-                    ? "bg-zinc-700 text-zinc-100 font-medium"
-                    : "text-zinc-300 hover:bg-zinc-800",
-                ].join(" ")}
-              >
-                {tf.label}
-              </button>
-            );
-          })}
-        </div>
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

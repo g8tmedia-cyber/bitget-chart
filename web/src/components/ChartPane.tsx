@@ -6,9 +6,18 @@
  * Outer container uses `absolute inset-0` so it fills the (relative)
  * parent regardless of flex / `h-full` quirks. Standard pattern for
  * chart libraries inside flex layouts.
+ *
+ * Header layout (left to right):
+ *   [ Time ]   1m  5m  15m  1D  1W  1M   [▾]
+ *
+ *   - "Time" button: click to switch the chart to a line preview.
+ *     Stays line until a row button is clicked.
+ *   - Row of timeframe buttons: click one to select it (candles).
+ *   - Chevron (▾) on the right: opens the visibility-manager popover
+ *     (independent of "Time" and the chart type).
  */
 
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { IChartApi } from "lightweight-charts";
 import { CandleChart } from "./CandleChart";
 import { CandleLegend } from "./CandleLegend";
@@ -16,6 +25,7 @@ import { ChartScaleMode, type ScaleMode } from "./ChartScaleMode";
 import { TimeframeSelector } from "./TimeframeSelector";
 import { TimeframeDropdown } from "./TimeframeDropdown";
 import { TimezoneSelect } from "./TimezoneSelect";
+import { TIMEFRAMES } from "../config/timeframes";
 import type { Candle } from "../api/types";
 import type { UseChartDataResult } from "../hooks/useChartData";
 import type { Timeframe } from "../config/timeframes";
@@ -34,6 +44,21 @@ export interface ChartPaneProps {
   onTimeframeChange: (tf: Timeframe) => void;
 }
 
+const VISIBLE_TF_STORAGE_KEY = "btcusdt-visible-timeframes";
+
+function loadInitialVisibleTimeframes(): Set<string> {
+  try {
+    const saved = localStorage.getItem(VISIBLE_TF_STORAGE_KEY);
+    if (saved) {
+      const labels = saved.split(",").filter(Boolean);
+      if (labels.length > 0) return new Set(labels);
+    }
+  } catch {
+    // fall through
+  }
+  return new Set(TIMEFRAMES.map((t) => t.label));
+}
+
 export function ChartPane({
   state,
   scaleMode,
@@ -50,14 +75,42 @@ export function ChartPane({
   const [hovered, setHovered] = useState<Candle | null>(null);
   const fading = loading && data.length > 0;
   const chartApiRef = useRef<IChartApi | null>(null);
+
+  // Chart type: "candle" by default. The "Time" button is a one-way
+  // switch to "line" (a preview of the price action). Selecting any
+  // timeframe in the row snaps it back to "candle". The chevron
+  // dropdown is independent of the chart type.
+  const [chartType, setChartType] = useState<"candle" | "line">("candle");
+
+  // Visibility manager dropdown (chevron-triggered, lives on the
+  // right of the row).
   const [intervalOpen, setIntervalOpen] = useState(false);
 
-  // While the interval-selector popover is open, the chart switches
-  // to a line preview. Closing the popover (selection, Escape, or
-  // click-outside) reverts the chart to candlesticks.
-  const effectiveChartType: "candle" | "line" = intervalOpen
-    ? "line"
-    : "candle";
+  // Which timeframe labels are currently shown in the row. Persisted
+  // to localStorage so the user's custom row survives reloads.
+  const [visibleTimeframes, setVisibleTimeframes] = useState<Set<string>>(
+    loadInitialVisibleTimeframes,
+  );
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        VISIBLE_TF_STORAGE_KEY,
+        Array.from(visibleTimeframes).join(","),
+      );
+    } catch {
+      // ignore
+    }
+  }, [visibleTimeframes]);
+
+  const toggleVisibility = useCallback((label: string) => {
+    setVisibleTimeframes((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  }, []);
 
   // "auto" mode snaps the chart back to fit all data and ensures the
   // price axis auto-scales to the visible range. Other modes just
@@ -74,27 +127,34 @@ export function ChartPane({
 
   return (
     <div className="relative w-full h-full">
-      {/* Top header: a "Time" section label + a row of timeframe
-          buttons. The "Time" label and the chevron on the last entry
-          both open the full interval selector popover. While the
-          popover is open, the chart switches to a line preview. */}
       <div className="flex items-center gap-3 px-2 py-1 border-b border-zinc-800 relative">
         <button
-          onClick={() => setIntervalOpen((o) => !o)}
-          className="text-[10px] uppercase tracking-wider text-zinc-500 hover:text-zinc-200 transition-colors"
+          onClick={() => setChartType("line")}
+          className={[
+            "text-[10px] uppercase tracking-wider transition-colors",
+            chartType === "line"
+              ? "text-zinc-100 font-semibold"
+              : "text-zinc-500 hover:text-zinc-200",
+          ].join(" ")}
+          title="Switch to line chart"
         >
           Time
         </button>
         <TimeframeSelector
           value={timeframe}
-          onChange={onTimeframeChange}
+          onChange={(tf) => {
+            onTimeframeChange(tf);
+            setChartType("candle");
+          }}
+          visibleTimeframes={visibleTimeframes}
           onChevronClick={() => setIntervalOpen((o) => !o)}
           disabled={state.loading && state.data.length === 0}
         />
         <TimeframeDropdown
           open={intervalOpen}
-          value={timeframe}
-          onChange={onTimeframeChange}
+          visibleTimeframes={visibleTimeframes}
+          onToggleVisibility={toggleVisibility}
+          selected={timeframe}
           onClose={() => setIntervalOpen(false)}
         />
       </div>
@@ -119,7 +179,7 @@ export function ChartPane({
             onCrosshair={setHovered}
             scaleMode={scaleMode}
             tzId={tzId}
-            chartType={effectiveChartType}
+            chartType={chartType}
             onChartApiReady={(c) => {
               chartApiRef.current = c;
             }}

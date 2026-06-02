@@ -1,82 +1,99 @@
+/**
+ * TimeframeSelector — plain-text row of timeframe buttons.
+ *
+ * Layout: [1m] [5m] [15m] [1D] [1W] [1M]   [▾]
+ *                                          ^-- separate chevron button,
+ *                                              not part of any timeframe
+ *
+ * Only renders the timeframes whose label is in `visibleTimeframes`.
+ * The chevron on the right is a separate clickable element that opens
+ * the visibility-manager dropdown.
+ *
+ * Clicking a timeframe button selects it (candlestick view). Clicking
+ * the chevron opens the dropdown (visibility manager). The two
+ * triggers are independent.
+ */
+
 import { TIMEFRAMES, type Timeframe } from "../config/timeframes";
 
 export interface TimeframeSelectorProps {
   value: Timeframe;
   onChange: (tf: Timeframe) => void;
   /**
-   * Called when the chevron on the last entry is clicked. Use this to
-   * open a fuller "select interval" popover elsewhere.
+   * Set of timeframe labels currently visible in the row. Timeframes
+   * not in this set are not rendered.
+   */
+  visibleTimeframes: Set<string>;
+  /**
+   * Called when the chevron on the right is clicked. Use this to
+   * open the visibility-manager dropdown elsewhere.
    */
   onChevronClick?: () => void;
   disabled?: boolean;
 }
 
-/**
- * Plain-text timeframe picker that matches the reference layout:
- * active TF in white, others in dim grey, no border / background.
- * A small chevron sits next to the last entry — clicking the
- * chevron fires `onChevronClick` (the parent typically uses this
- * to open an interval-selector popover), clicking the label
- * itself selects the timeframe.
- */
 export function TimeframeSelector({
   value,
   onChange,
+  visibleTimeframes,
   onChevronClick,
   disabled,
 }: TimeframeSelectorProps) {
+  const visible = TIMEFRAMES.filter((tf) => visibleTimeframes.has(tf.label));
+
   return (
     <div className="flex items-center gap-1 text-xs select-none">
-      {TIMEFRAMES.map((tf, i) => {
-        const active = tf.label === value.label;
-        const isLast = i === TIMEFRAMES.length - 1;
-        return (
-          <button
-            key={tf.label}
-            onClick={() => onChange(tf)}
-            disabled={disabled}
-            className={[
-              "px-1 py-0.5 rounded-sm transition-colors",
-              "inline-flex items-center gap-1",
-              active
-                ? "text-zinc-100 font-semibold"
-                : "text-zinc-500 hover:text-zinc-200",
-              disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer",
-            ].join(" ")}
-            title={tf.label}
+      {visible.length === 0 ? (
+        <span className="text-zinc-500 italic px-1">
+          (empty — open the picker)
+        </span>
+      ) : (
+        visible.map((tf) => {
+          const active = tf.label === value.label;
+          return (
+            <button
+              key={tf.label}
+              onClick={() => onChange(tf)}
+              disabled={disabled}
+              className={[
+                "px-1 py-0.5 rounded-sm transition-colors",
+                active
+                  ? "text-zinc-100 font-semibold"
+                  : "text-zinc-500 hover:text-zinc-200",
+                disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer",
+              ].join(" ")}
+              title={tf.label}
+            >
+              {tf.label}
+            </button>
+          );
+        })
+      )}
+
+      {/* Separate chevron on the right of the row. Not part of any
+          timeframe button — its only job is to open the visibility
+          manager dropdown. */}
+      {onChevronClick && (
+        <button
+          onClick={onChevronClick}
+          className="ml-1 inline-flex items-center justify-center w-4 h-4 rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+          title="Customize visible timeframes"
+          aria-label="Customize visible timeframes"
+        >
+          <svg
+            viewBox="0 0 16 16"
+            className="w-2.5 h-2.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
           >
-            <span>{tf.label}</span>
-            {isLast && (
-              <span
-                role={onChevronClick ? "button" : undefined}
-                onClick={(e) => {
-                  if (!onChevronClick) return;
-                  e.stopPropagation();
-                  onChevronClick();
-                }}
-                className={[
-                  "inline-flex items-center",
-                  onChevronClick ? "cursor-pointer" : "cursor-default",
-                ].join(" ")}
-                title="Open interval selector"
-              >
-                <svg
-                  viewBox="0 0 16 16"
-                  className="w-2.5 h-2.5"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden
-                >
-                  <path d="M3 6l5 5 5-5" />
-                </svg>
-              </span>
-            )}
-          </button>
-        );
-      })}
+            <path d="M3 6l5 5 5-5" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }
