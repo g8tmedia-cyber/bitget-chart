@@ -28,12 +28,14 @@ import {
 } from "lightweight-charts";
 import type { Candle } from "../api/types";
 
+export type ScaleMode = "auto" | "log" | "percent";
+
 export interface CandleChartProps {
   data: Candle[];
   latestPrice?: number;
   onCrosshair?: (bar: Candle | null) => void;
-  /** Logarithmic price scale when true, linear when false. */
-  logScale?: boolean;
+  /** Price scale mode: auto (linear+autoscale), log, or percent. */
+  scaleMode?: ScaleMode;
   /** Called once when the chart instance is created. Used for imperative
    *  actions (e.g. fitContent) from outside the component. */
   onChartApiReady?: (chart: IChartApi) => void;
@@ -43,7 +45,7 @@ export function CandleChart({
   data,
   latestPrice,
   onCrosshair,
-  logScale = false,
+  scaleMode = "auto",
   onChartApiReady,
 }: CandleChartProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -204,16 +206,20 @@ export function CandleChart({
     }
   }, [latestPrice]);
 
-  // --- Price scale mode (linear vs log) -----------------------------------
+  // --- Price scale mode (auto | log | percent) ---------------------------
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart) return;
+    const mode =
+      scaleMode === "log"
+        ? PriceScaleMode.Logarithmic
+        : scaleMode === "percent"
+          ? PriceScaleMode.Percentage
+          : PriceScaleMode.Normal;
     chart.applyOptions({
-      rightPriceScale: {
-        mode: logScale ? PriceScaleMode.Logarithmic : PriceScaleMode.Normal,
-      },
+      rightPriceScale: { mode },
     });
-  }, [logScale]);
+  }, [scaleMode]);
 
   return <div ref={containerRef} className="w-full h-full" />;
 }

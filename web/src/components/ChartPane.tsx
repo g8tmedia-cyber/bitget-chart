@@ -1,42 +1,54 @@
 /**
- * ChartPane — owns the chart's loading/error/empty state visuals
- * and the crosshair-driven OHLC legend overlay.
+ * ChartPane — owns the chart's loading/error/empty state visuals,
+ * the crosshair-driven OHLC legend overlay, and the bottom-right
+ * chart controls (clock + scale-mode toggle).
  *
  * Outer container uses `absolute inset-0` so it fills the (relative)
- * parent regardless of flex / `h-full` quirks. This is the standard
- * pattern for chart libraries inside flex layouts.
+ * parent regardless of flex / `h-full` quirks. Standard pattern for
+ * chart libraries inside flex layouts.
  */
 
 import { useRef, useState } from "react";
 import type { IChartApi } from "lightweight-charts";
 import { CandleChart } from "./CandleChart";
 import { CandleLegend } from "./CandleLegend";
-import { ScaleToggle } from "./ScaleToggle";
+import { ChartScaleMode, type ScaleMode } from "./ChartScaleMode";
+import { ChartClock } from "./ChartClock";
 import type { Candle } from "../api/types";
 import type { UseChartDataResult } from "../hooks/useChartData";
 
 export interface ChartPaneProps {
   state: UseChartDataResult;
-  logScale: boolean;
-  onLogChange: (v: boolean) => void;
+  scaleMode: ScaleMode;
+  onScaleModeChange: (mode: ScaleMode) => void;
+  timezone?: string;
+  onTimezoneChange?: (tz: string) => void;
 }
 
-export function ChartPane({ state, logScale, onLogChange }: ChartPaneProps) {
+export function ChartPane({
+  state,
+  scaleMode,
+  onScaleModeChange,
+  timezone,
+  onTimezoneChange,
+}: ChartPaneProps) {
   const { data, loading, error, refetch } = state;
   const latest = data.length > 0 ? data[data.length - 1]! : null;
   const [hovered, setHovered] = useState<Candle | null>(null);
   const fading = loading && data.length > 0;
   const chartApiRef = useRef<IChartApi | null>(null);
 
-  // "Auto" snaps both axes back to fit all data:
-  //   - timeScale().fitContent()      resets X (pan/zoom)
-  //   - priceScale autoScale = true   resets Y (in case the user had
-  //                                   manually zoomed the price axis)
-  const handleReset = () => {
-    const chart = chartApiRef.current;
-    if (!chart) return;
-    chart.timeScale().fitContent();
-    chart.priceScale("right").applyOptions({ autoScale: true });
+  // "auto" mode snaps the chart back to fit all data and ensures the
+  // price axis auto-scales to the visible range. Other modes just
+  // switch the price-axis mode and leave the user's zoom alone.
+  const handleScaleModeChange = (mode: ScaleMode) => {
+    onScaleModeChange(mode);
+    if (mode === "auto") {
+      const chart = chartApiRef.current;
+      if (!chart) return;
+      chart.timeScale().fitContent();
+      chart.priceScale("right").applyOptions({ autoScale: true });
+    }
   };
 
   return (
@@ -57,7 +69,7 @@ export function ChartPane({ state, logScale, onLogChange }: ChartPaneProps) {
           data={data}
           latestPrice={latest?.close}
           onCrosshair={setHovered}
-          logScale={logScale}
+          scaleMode={scaleMode}
           onChartApiReady={(c) => {
             chartApiRef.current = c;
           }}
@@ -72,12 +84,13 @@ export function ChartPane({ state, logScale, onLogChange }: ChartPaneProps) {
         />
       </div>
 
-      <div className="absolute top-2 right-2 z-10">
-        <ScaleToggle
-          logScale={logScale}
-          onLogChange={onLogChange}
-          onReset={handleReset}
+      {/* Bottom-right controls (matches the TradingView image layout) */}
+      <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1.5">
+        <ChartClock
+          timezone={timezone as never}
+          onTimezoneChange={onTimezoneChange as never}
         />
+        <ChartScaleMode value={scaleMode} onChange={handleScaleModeChange} />
       </div>
     </div>
   );
