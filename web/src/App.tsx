@@ -110,10 +110,7 @@ function App() {
     <div className="h-screen flex flex-col bg-zinc-950 text-zinc-100 overflow-hidden">
       <TopBar
         symbol={SYMBOL}
-        timeframeLabel={tf.label}
         ticker={ticker}
-        wsStatus={state.wsStatus}
-        updatedAt={state.updatedAt}
       />
       <main className="flex-1 p-3 grid grid-cols-[1fr_280px] gap-3 min-h-0">
         <div className="flex flex-col gap-3 min-h-0">

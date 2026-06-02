@@ -1,125 +1,192 @@
+/**
+ * TopBar — ticker selector row across the top of the page.
+ *
+ * Mirrors the reference layout:
+ *   [icon] [SYMBOL ▼ ★]  [Last price]  [Mark] [Index] [24h High]
+ *   [Low] [24h Vol BTC] [24h Vol USDT] [Funding/Countdown]
+ *
+ * `Perpetual` is the contract-type sub-label.
+ * Dropdown caret (▼) and star (★) are placeholders for the symbol
+ * picker and watchlist — they don't do anything yet.
+ */
+
+import { useEffect, useState } from "react";
 import type { Ticker } from "../api/types";
-import type { WsStatus } from "../types";
-import { LastUpdated } from "./LastUpdated";
 
 export interface TopBarProps {
   symbol: string;
-  timeframeLabel: string;
   ticker: Ticker | null;
-  wsStatus: WsStatus;
-  updatedAt: number | null;
 }
 
-export function TopBar({
-  symbol,
-  timeframeLabel,
-  ticker,
-  wsStatus,
-  updatedAt,
-}: TopBarProps) {
+export function TopBar({ symbol, ticker }: TopBarProps) {
   const change = ticker?.change24hPct ?? 0;
   const positive = change >= 0;
   const changeText = `${positive ? "+" : ""}${change.toFixed(2)}%`;
+  const changeAbs = ticker ? Math.abs(ticker.lastPrice - ticker.open24h) : 0;
+  const changeAbsText = changeAbs.toLocaleString(undefined, {
+    maximumFractionDigits: 1,
+  });
 
   return (
-    <header className="px-4 sm:px-6 py-3 border-b border-zinc-800 flex flex-wrap items-center gap-x-4 gap-y-1">
-      <div className="flex items-baseline gap-2">
-        <span className="text-xs uppercase tracking-widest text-zinc-500">
-          {symbol}
-        </span>
-        <span className="text-zinc-400 text-xs">USDT-FUTURES · Perp</span>
+    <header className="px-4 sm:px-6 py-3 border-b border-zinc-800 flex flex-wrap items-center gap-x-5 gap-y-2">
+      {/* --- Symbol cluster: icon + SYMBOL + dropdown + star + Perpetual --- */}
+      <div className="flex items-center gap-2">
+        <BitcoinIcon />
+        <div className="flex items-center gap-1.5">
+          <span className="text-base font-semibold text-zinc-100">{symbol}</span>
+          <button
+            type="button"
+            className="text-zinc-500 hover:text-zinc-200 transition-colors"
+            title="Switch symbol"
+            aria-label="Switch symbol"
+          >
+            <ChevronDownIcon />
+          </button>
+          <button
+            type="button"
+            className="text-orange-400 hover:text-orange-300 transition-colors"
+            title="Add to watchlist"
+            aria-label="Add to watchlist"
+          >
+            <StarIcon />
+          </button>
+        </div>
+        <span className="text-zinc-500 text-xs">Perpetual</span>
       </div>
-      <PriceDisplay ticker={ticker} />
-      <ChangeBadge value={changeText} positive={positive} />
-      <div className="hidden md:flex items-center gap-4 text-xs text-zinc-400">
-        <Stat label="24h High" value={ticker ? fmt(ticker.high24h) : "—"} />
-        <Stat label="24h Low" value={ticker ? fmt(ticker.low24h) : "—"} />
+
+      {/* --- Live price + 24h change stacked --- */}
+      <div className="flex flex-col leading-tight">
+        <span className="text-2xl font-semibold text-emerald-400 tabular-nums">
+          {ticker ? fmt(ticker.lastPrice) : "—"}
+        </span>
+        <span
+          className={[
+            "text-xs font-medium tabular-nums",
+            positive ? "text-emerald-400" : "text-red-400",
+          ].join(" ")}
+        >
+          {ticker ? `-${changeAbsText} (${changeText})` : "—"}
+        </span>
+      </div>
+
+      {/* --- Stat tiles --- */}
+      <div className="hidden md:flex items-center gap-5 text-xs">
+        <Stat label="Mark price" value={ticker ? fmt(ticker.markPrice) : "—"} />
         <Stat
-          label="24h Vol"
+          label="Index price"
+          value={ticker ? fmt(ticker.indexPrice) : "—"}
+          trailing={<span className="text-zinc-500">↗</span>}
+        />
+        <Stat label="24h high" value={ticker ? fmt(ticker.high24h) : "—"} />
+        <Stat label="24h low" value={ticker ? fmt(ticker.low24h) : "—"} />
+        <Stat
+          label="24h quantity (BTC)"
+          value={ticker ? humanVolume(ticker.baseVolume24h) : "—"}
+        />
+        <Stat
+          label="24h total (USDT)"
           value={ticker ? humanVolume(ticker.quoteVolume24h) : "—"}
         />
         <Stat
-          label="Funding"
+          label="Funding rate/Countdown (8h)"
           value={
             ticker
               ? `${(ticker.fundingRate * 100).toFixed(4)}%`
               : "—"
           }
+          trailing={
+            ticker ? (
+              <>
+                <span className="text-zinc-500 mx-1">/</span>
+                <FundingCountdown nextFundingTimeMs={ticker.nextFundingTime} />
+              </>
+            ) : null
+          }
+          valueClassName="text-emerald-400"
         />
       </div>
-      <span className="ml-auto flex items-center gap-3 text-xs text-zinc-500">
-        <LastUpdated updatedAt={updatedAt} />
-        <span className="hidden sm:inline">{timeframeLabel}</span>
-        <WsDot status={wsStatus} />
-      </span>
     </header>
   );
 }
 
-function PriceDisplay({ ticker }: { ticker: Ticker | null }) {
-  if (!ticker) {
-    return (
-      <span className="text-zinc-500 text-2xl font-semibold tabular-nums">
-        —
-      </span>
-    );
-  }
-  return (
-    <span className="text-2xl font-semibold tabular-nums">
-      {fmt(ticker.lastPrice)}
-    </span>
-  );
-}
+// --- Sub-components ----------------------------------------------------------
 
-function ChangeBadge({ value, positive }: { value: string; positive: boolean }) {
+function Stat({
+  label,
+  value,
+  trailing,
+  valueClassName = "text-zinc-200",
+}: {
+  label: string;
+  value: string;
+  trailing?: React.ReactNode;
+  valueClassName?: string;
+}) {
   return (
-    <span
-      className={[
-        "px-2 py-0.5 rounded text-xs font-medium tabular-nums",
-        positive
-          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
-          : "bg-red-500/10 text-red-400 border border-red-500/30",
-      ].join(" ")}
-    >
-      {value}
-    </span>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col items-end">
+    <div className="flex flex-col items-start">
       <span className="text-zinc-500 uppercase text-[10px] tracking-wider">
         {label}
       </span>
-      <span className="text-zinc-200 tabular-nums">{value}</span>
+      <span className={["tabular-nums", valueClassName].join(" ")}>
+        {value}
+        {trailing}
+      </span>
     </div>
   );
 }
 
-function WsDot({
-  status,
-}: {
-  status: "connecting" | "open" | "closed" | "error" | "idle";
-}) {
-  const color =
-    status === "open"
-      ? "bg-emerald-400"
-      : status === "connecting"
-        ? "bg-amber-400 animate-pulse"
-        : status === "error" || status === "closed"
-          ? "bg-red-400"
-          : "bg-zinc-600";
+function BitcoinIcon() {
   return (
-    <span
-      title={`WebSocket: ${status}`}
-      className={`inline-block w-2 h-2 rounded-full ${color}`}
-    />
+    <div className="w-7 h-7 rounded-full bg-orange-500 flex items-center justify-center text-zinc-950 font-bold text-base shrink-0 leading-none">
+      ₿
+    </div>
   );
 }
 
+function ChevronDownIcon() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className="w-3 h-3"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 6l5 5 5-5" />
+    </svg>
+  );
+}
+
+function StarIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
+      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+    </svg>
+  );
+}
+
+function FundingCountdown({ nextFundingTimeMs }: { nextFundingTimeMs: number }) {
+  // Tick every second so the countdown stays live.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const remaining = Math.max(0, nextFundingTimeMs - now);
+  const h = Math.floor(remaining / 3_600_000);
+  const m = Math.floor((remaining % 3_600_000) / 60_000);
+  const s = Math.floor((remaining % 60_000) / 1000);
+  const text = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+
+  return <span className="tabular-nums">{text}</span>;
+}
+
+// --- Helpers (also used in CandleLegend — duplicate; lift later) -----------
+
 function fmt(n: number): string {
-  // Auto-precision: 2 decimals for >1000, 4 for >1, 6 for tiny
   if (n >= 1000) return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
   if (n >= 1) return n.toLocaleString(undefined, { maximumFractionDigits: 4 });
   return n.toLocaleString(undefined, { maximumFractionDigits: 6 });
