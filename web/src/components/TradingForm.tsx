@@ -11,7 +11,7 @@
  *   Price  [____] [BBO]
  *   Quantity [____]  BTC⌄
  *   ●---●---●---●---●  0% 25% 50% 75% 100%
- *   Cost  0.00 / 0.00 USDT
+ *   Cost / Margin  0.00 / 0.00 USDT
  *   ☐ TP/SL
  *   Time in force [GTC ⌄]
  *   [ Open long ]  [ Open short ]
@@ -274,13 +274,22 @@ export function TradingForm({
         </div>
       </div>
 
-      {/* Cost */}
-      <div className="px-3 py-1.5 border-b border-zinc-800 flex items-center justify-between text-[11px]">
-        <span className="text-zinc-500">Cost</span>
-        <span className="text-zinc-300 tabular-nums">
-          {cost.toFixed(2)} <span className="text-zinc-600">/</span>{" "}
-          {orderType === "market" ? "0.00" : "0.00"} USDT
-        </span>
+      {/* Cost / Margin — notional on the left, required margin
+          (cost ÷ leverage) on the right. Both update live with
+          quantity, price, and leverage. */}
+      <div className="px-3 py-1.5 border-b border-zinc-800">
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="text-zinc-500">Cost / Margin</span>
+          <span className="text-zinc-300 tabular-nums">
+            {cost.toFixed(2)}{" "}
+            <span className="text-zinc-600">/</span>{" "}
+            {leverage > 0 ? (cost / leverage).toFixed(2) : "0.00"} USDT
+          </span>
+        </div>
+        <div className="flex items-center justify-between text-[9px] text-zinc-600 mt-0.5 uppercase tracking-wider">
+          <span>notional</span>
+          <span>margin</span>
+        </div>
       </div>
 
       {/* TP/SL */}
