@@ -131,4 +131,90 @@ export async function getSymbols(): Promise<SymbolInfo[]> {
   }));
 }
 
+// ---------------------------------------------------------------------------
+// Order book
+// ---------------------------------------------------------------------------
+
+export interface OrderBookLevel {
+  price: number;
+  size: number;
+}
+
+export interface OrderBookSnapshot {
+  /** Asks sorted ascending by price. */
+  asks: OrderBookLevel[];
+  /** Bids sorted descending by price. */
+  bids: OrderBookLevel[];
+  /** Match-engine timestamp, ms. */
+  ts: number;
+}
+
+/**
+ * REST snapshot of the order book. Returns up to `limit` levels on
+ * each side (Bitget caps this at 200 for `/orderbook`).
+ */
+export async function getOrderbook(
+  symbol: string,
+  limit: number = 15,
+): Promise<OrderBookSnapshot> {
+  const rows = await request<
+    { asks: [string, string][]; bids: [string, string][]; ts: string }[]
+  >("/api/v2/mix/market/orderbook", {
+    symbol,
+    productType: PRODUCT_TYPE,
+    limit,
+  });
+  const row = rows[0];
+  if (!row) throw new Error(`Empty order book response for ${symbol}`);
+  return {
+    asks: row.asks
+      .map(([p, s]) => ({ price: Number(p), size: Number(s) }))
+      .sort((a, b) => a.price - b.price),
+    bids: row.bids
+      .map(([p, s]) => ({ price: Number(p), size: Number(s) }))
+      .sort((a, b) => b.price - a.price),
+    ts: Number(row.ts),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Recent public trades (fills)
+// ---------------------------------------------------------------------------
+
+export interface PublicTrade {
+  tradeId: string;
+  price: number;
+  size: number;
+  /** "buy" or "sell" — taker side */
+  side: "buy" | "sell";
+  /** Match-engine timestamp, ms. */
+  ts: number;
+}
+
+export async function getRecentTrades(
+  symbol: string,
+  limit: number = 50,
+): Promise<PublicTrade[]> {
+  const rows = await request<
+    {
+      tradeId: string;
+      price: string;
+      size: string;
+      side: string;
+      ts: string;
+    }[]
+  >("/api/v2/mix/market/fills", {
+    symbol,
+    productType: PRODUCT_TYPE,
+    limit,
+  });
+  return rows.map((r) => ({
+    tradeId: r.tradeId,
+    price: Number(r.price),
+    size: Number(r.size),
+    side: r.side === "buy" ? "buy" : "sell",
+    ts: Number(r.ts),
+  }));
+}
+
 export { BitgetApiError };

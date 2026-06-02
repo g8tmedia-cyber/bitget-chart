@@ -4,16 +4,13 @@
  * Layout (top to bottom):
  *   - Top bar      : <TopBar> symbol + price + 24h stats
  *   - Body grid    : 2 columns
- *       - Left     : [TimeframeSelector] above the chart, chart fills
- *                    the rest
- *       - Right    : <OrderBookPanel> + <RecentTradesPanel>
+ *       - Left     : chart with timeframe picker in its top header
+ *       - Right    : <SidePanel> (Order book / Market trades tabs)
  */
 
 import { useEffect, useState } from "react";
 import { ChartPane } from "./components/ChartPane";
-import { OrderBookPanel } from "./components/OrderBookPanel";
-import { RecentTradesPanel } from "./components/RecentTradesPanel";
-import { TimeframeSelector } from "./components/TimeframeSelector";
+import { SidePanel } from "./components/SidePanel";
 import { TopBar } from "./components/TopBar";
 import { useChartData } from "./hooks/useChartData";
 import { useTicker } from "./hooks/useTicker";
@@ -113,31 +110,20 @@ function App() {
     <div className="h-screen flex flex-col bg-zinc-950 text-zinc-100 overflow-hidden">
       <TopBar symbol={SYMBOL} ticker={ticker} />
       <main className="flex-1 p-3 grid grid-cols-[1fr_280px] gap-3 min-h-0">
-        <div className="flex flex-col gap-3 min-h-0">
-          <div className="flex items-center justify-center">
-            <TimeframeSelector
-              value={tf}
-              onChange={setTf}
-              disabled={state.loading && state.data.length === 0}
-            />
-          </div>
-          <div className="relative flex-1 min-h-0 rounded border border-zinc-800 bg-zinc-950">
-            <ChartPane
-              state={state}
-              scaleMode={scaleMode}
-              onScaleModeChange={setScaleMode}
-              tzId={tzId}
-              onTzIdChange={setTzId}
-              symbol={SYMBOL}
-              exchange={EXCHANGE}
-              timeframeLabel={tf.label}
-            />
-          </div>
+        <div className="relative min-h-0 rounded border border-zinc-800 bg-zinc-950 overflow-hidden">
+          <ChartPane
+            state={state}
+            scaleMode={scaleMode}
+            onScaleModeChange={setScaleMode}
+            tzId={tzId}
+            onTzIdChange={setTzId}
+            symbol={SYMBOL}
+            exchange={EXCHANGE}
+            timeframe={tf}
+            onTimeframeChange={setTf}
+          />
         </div>
-        <div className="flex flex-col gap-3 min-h-0">
-          <OrderBookPanel />
-          <RecentTradesPanel />
-        </div>
+        <SidePanel symbol={SYMBOL} />
       </main>
     </div>
   );

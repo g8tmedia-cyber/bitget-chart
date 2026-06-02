@@ -13,9 +13,11 @@ import type { IChartApi } from "lightweight-charts";
 import { CandleChart } from "./CandleChart";
 import { CandleLegend } from "./CandleLegend";
 import { ChartScaleMode, type ScaleMode } from "./ChartScaleMode";
+import { TimeframeSelector } from "./TimeframeSelector";
 import { TimezoneSelect } from "./TimezoneSelect";
 import type { Candle } from "../api/types";
 import type { UseChartDataResult } from "../hooks/useChartData";
+import type { Timeframe } from "../config/timeframes";
 
 export interface ChartPaneProps {
   state: UseChartDataResult;
@@ -27,7 +29,8 @@ export interface ChartPaneProps {
   symbol: string;
   exchange: string;
   /** Timeframe label (e.g. "1H") for the chart-top OHLC legend */
-  timeframeLabel: string;
+  timeframe: Timeframe;
+  onTimeframeChange: (tf: Timeframe) => void;
 }
 
 export function ChartPane({
@@ -38,7 +41,8 @@ export function ChartPane({
   onTzIdChange,
   symbol,
   exchange,
-  timeframeLabel,
+  timeframe,
+  onTimeframeChange,
 }: ChartPaneProps) {
   const { data, loading, error, refetch } = state;
   const latest = data.length > 0 ? data[data.length - 1]! : null;
@@ -60,45 +64,60 @@ export function ChartPane({
   };
 
   return (
-    <div className="absolute inset-0">
-      {loading && data.length === 0 && <ChartSkeleton />}
-      {error && data.length === 0 && (
-        <ChartError message={error} onRetry={refetch} />
-      )}
-      {!loading && !error && data.length === 0 && <ChartEmpty />}
-
-      <div
-        className={[
-          "absolute inset-0 transition-opacity duration-200",
-          fading ? "opacity-50" : "opacity-100",
-        ].join(" ")}
-      >
-        <CandleChart
-          data={data}
-          latestPrice={latest?.close}
-          onCrosshair={setHovered}
-          scaleMode={scaleMode}
-          tzId={tzId}
-          onChartApiReady={(c) => {
-            chartApiRef.current = c;
-          }}
+    <div className="relative w-full h-full">
+      {/* Top header: timeframe picker (left) — sits above the chart canvas */}
+      <div className="flex items-center gap-2 px-2 py-1 border-b border-zinc-800">
+        <span className="text-[10px] uppercase tracking-wider text-zinc-500">
+          Time
+        </span>
+        <TimeframeSelector
+          value={timeframe}
+          onChange={onTimeframeChange}
+          disabled={state.loading && state.data.length === 0}
         />
       </div>
 
-      <div className="absolute top-2 left-2 z-10 pointer-events-none">
-        <CandleLegend
-          hovered={hovered}
-          latest={latest}
-          symbol={symbol}
-          exchange={exchange}
-          timeframeLabel={timeframeLabel}
-        />
-      </div>
+      {/* The chart itself + overlays (fills the rest) */}
+      <div className="absolute inset-x-0 bottom-0 top-[33px]">
+        {loading && data.length === 0 && <ChartSkeleton />}
+        {error && data.length === 0 && (
+          <ChartError message={error} onRetry={refetch} />
+        )}
+        {!loading && !error && data.length === 0 && <ChartEmpty />}
 
-      {/* Bottom-right controls (matches the TradingView image layout) */}
-      <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1.5">
-        <TimezoneSelect tzId={tzId} onChange={onTzIdChange} />
-        <ChartScaleMode value={scaleMode} onChange={handleScaleModeChange} />
+        <div
+          className={[
+            "absolute inset-0 transition-opacity duration-200",
+            fading ? "opacity-50" : "opacity-100",
+          ].join(" ")}
+        >
+          <CandleChart
+            data={data}
+            latestPrice={latest?.close}
+            onCrosshair={setHovered}
+            scaleMode={scaleMode}
+            tzId={tzId}
+            onChartApiReady={(c) => {
+              chartApiRef.current = c;
+            }}
+          />
+        </div>
+
+        <div className="absolute top-2 left-2 z-10 pointer-events-none">
+          <CandleLegend
+            hovered={hovered}
+            latest={latest}
+            symbol={symbol}
+            exchange={exchange}
+            timeframeLabel={timeframe.label}
+          />
+        </div>
+
+        {/* Bottom-right controls (matches the TradingView image layout) */}
+        <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1.5">
+          <TimezoneSelect tzId={tzId} onChange={onTzIdChange} />
+          <ChartScaleMode value={scaleMode} onChange={handleScaleModeChange} />
+        </div>
       </div>
     </div>
   );
