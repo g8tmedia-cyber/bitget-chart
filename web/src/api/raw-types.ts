@@ -57,5 +57,13 @@ export interface RawMixSymbol {
   baseCoin: string;
   quoteCoin: string;
   productType: "USDT-FUTURES" | "COIN-FUTURES" | "USDC-FUTURES";
+  /** Min leverage (string-encoded integer, e.g. "1") */
+  minLever?: string;
+  /** Max leverage (string-encoded integer, e.g. "150") */
+  maxLever?: string;
+  /** Price decimal places (e.g. "1" for BTCUSDT) */
+  pricePlace?: string;
+  /** Size decimal places (e.g. "4" for BTCUSDT) */
+  volumePlace?: string;
   // many more fields exist on the wire; we only model what we use
 }

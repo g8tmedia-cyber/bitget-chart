@@ -40,4 +40,8 @@ export interface SymbolInfo {
   baseCoin: string;
   quoteCoin: string;
   productType: "USDT-FUTURES" | "COIN-FUTURES" | "USDC-FUTURES";
+  minLever?: number;
+  maxLever?: number;
+  pricePlace?: number;
+  volumePlace?: number;
 }

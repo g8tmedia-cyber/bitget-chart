@@ -2,19 +2,28 @@
  * BTCUSDT Chart — full app shell.
  *
  * Layout (top to bottom):
- *   - Top bar      : <TopBar> symbol picker + price + 24h stats
- *   - Body grid    : 2 columns
- *       - Left     : chart with timeframe picker in its top header
- *       - Right    : <SidePanel> (Order book / Market trades tabs)
+ *   - Top bar           : <TopBar> symbol picker + price + 24h stats
+ *   - 3-col main row    :
+ *       - Left          : chart
+ *       - Middle (280px): <SidePanel> (Order book | Market trades tabs)
+ *       - Right (340px) : <TradingForm> + <AccountPanel>
+ *   - Bottom panel      : <BottomPanel> (Positions / Open orders / …)
  *
  * Document title: live price from the trade stream, throttled to
- * ~10Hz so we don't thrash the title bar. Format: `12345.67 | BTCUSDT`.
+ * ~10Hz. Format: `12345.67 | BTCUSDT`.
+ *
+ * `latestPrice` is a throttled 10Hz state, updated from the same
+ * TradesStream that drives the title. The TradingForm uses it for
+ * the BBO quick-set button and the cost preview.
  */
 
 import { useEffect, useState } from "react";
 import { ChartPane } from "./components/ChartPane";
 import { SidePanel } from "./components/SidePanel";
 import { TopBar } from "./components/TopBar";
+import { TradingForm } from "./components/TradingForm";
+import { AccountPanel } from "./components/AccountPanel";
+import { BottomPanel } from "./components/BottomPanel";
 import { useChartData } from "./hooks/useChartData";
 import { useTicker } from "./hooks/useTicker";
 import { TradesStream } from "./api/trades-ws";
@@ -34,9 +43,9 @@ const TZ_ID_STORAGE_KEY = "btcusdt-tz-id";
 const SYMBOL_STORAGE_KEY = "btcusdt-symbol";
 const DEFAULT_TZ_ID = "UTC";
 
-// Throttle window for browser-tab title updates. 100ms = 10Hz, well
-// below human perception but enough to avoid document.title churn.
-const TITLE_THROTTLE_MS = 100;
+// Throttle window for browser-tab title updates and the trading
+// form's BBO. 100ms = 10Hz, well below human perception.
+const TICK_THROTTLE_MS = 100;
 
 const VALID_SCALE_MODES: ScaleMode[] = ["auto", "log", "percent"];
 
@@ -93,6 +102,7 @@ function App() {
   });
   const [scaleMode, setScaleMode] = useState<ScaleMode>(loadInitialScaleMode);
   const [tzId, setTzId] = useState<string>(loadInitialTzId);
+  const [latestPrice, setLatestPrice] = useState<number | null>(null);
   const state = useChartData(symbol, tf);
   const { ticker } = useTicker(symbol);
 
@@ -128,12 +138,13 @@ function App() {
     }
   }, [tzId]);
 
-  // Live document title — `price | symbol`. Subscribes directly to
-  // the trade stream (each trade is a price tick) and throttles
-  // document.title writes to TITLE_THROTTLE_MS. No App re-renders
-  // are triggered; the title is written as a side effect.
+  // Live document title + throttled latestPrice for the trading form.
+  // Subscribes directly to the trade stream (each trade = a price
+  // tick) and throttles document.title + setLatestPrice writes to
+  // TICK_THROTTLE_MS. No App re-renders between throttles.
   useEffect(() => {
     document.title = formatTitle(null, symbol);
+    setLatestPrice(null);
 
     let timer: number | null = null;
     let pendingPrice: number | null = null;
@@ -147,8 +158,9 @@ function App() {
         pendingPrice = price;
         const now = performance.now();
         const elapsed = now - lastUpdate;
-        if (elapsed >= TITLE_THROTTLE_MS) {
+        if (elapsed >= TICK_THROTTLE_MS) {
           document.title = formatTitle(price, symbol);
+          setLatestPrice(price);
           lastUpdate = now;
           pendingPrice = null;
         } else if (timer == null) {
@@ -156,10 +168,11 @@ function App() {
             timer = null;
             if (pendingPrice != null) {
               document.title = formatTitle(pendingPrice, symbol);
+              setLatestPrice(pendingPrice);
               lastUpdate = performance.now();
               pendingPrice = null;
             }
-          }, TITLE_THROTTLE_MS - elapsed);
+          }, TICK_THROTTLE_MS - elapsed);
         }
       },
     });
@@ -176,21 +189,30 @@ function App() {
   return (
     <div className="h-screen flex flex-col bg-zinc-950 text-zinc-100 overflow-hidden">
       <TopBar symbol={symbol} onSymbolChange={setSymbol} ticker={ticker} />
-      <main className="flex-1 p-3 grid grid-cols-[1fr_280px] gap-3 min-h-0">
-        <div className="relative min-h-0 rounded border border-zinc-800 bg-zinc-950 overflow-hidden">
-          <ChartPane
-            state={state}
-            scaleMode={scaleMode}
-            onScaleModeChange={setScaleMode}
-            tzId={tzId}
-            onTzIdChange={setTzId}
-            symbol={symbol}
-            exchange={EXCHANGE}
-            timeframe={tf}
-            onTimeframeChange={setTf}
-          />
+      <main className="flex-1 p-3 flex flex-col gap-3 min-h-0">
+        <div className="flex-1 grid grid-cols-[1fr_280px_340px] gap-3 min-h-0">
+          <div className="relative min-h-0 rounded border border-zinc-800 bg-zinc-950 overflow-hidden">
+            <ChartPane
+              state={state}
+              scaleMode={scaleMode}
+              onScaleModeChange={setScaleMode}
+              tzId={tzId}
+              onTzIdChange={setTzId}
+              symbol={symbol}
+              exchange={EXCHANGE}
+              timeframe={tf}
+              onTimeframeChange={setTf}
+            />
+          </div>
+          <SidePanel symbol={symbol} />
+          <aside className="relative min-h-0 rounded border border-zinc-800 bg-zinc-950 flex flex-col overflow-hidden">
+            <TradingForm symbol={symbol} latestPrice={latestPrice} />
+            <AccountPanel />
+          </aside>
         </div>
-        <SidePanel symbol={symbol} />
+        <div className="h-[260px] shrink-0">
+          <BottomPanel />
+        </div>
       </main>
     </div>
   );

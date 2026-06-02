@@ -128,7 +128,37 @@ export async function getSymbols(): Promise<SymbolInfo[]> {
     baseCoin: r.baseCoin,
     quoteCoin: r.quoteCoin,
     productType: r.productType,
+    minLever: r.minLever != null ? Number(r.minLever) : undefined,
+    maxLever: r.maxLever != null ? Number(r.maxLever) : undefined,
+    pricePlace: r.pricePlace != null ? Number(r.pricePlace) : undefined,
+    volumePlace: r.volumePlace != null ? Number(r.volumePlace) : undefined,
   }));
+}
+
+/**
+ * Get the contract info for a single symbol — used to look up
+ * per-symbol max leverage for the trading form's leverage selector.
+ * Returns null if the symbol isn't found.
+ */
+export async function getContractInfo(
+  symbol: string,
+): Promise<SymbolInfo | null> {
+  const rows = await request<RawMixSymbol[]>(
+    "/api/v2/mix/market/contracts",
+    { productType: PRODUCT_TYPE, symbol },
+  );
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    symbol: r.symbol,
+    baseCoin: r.baseCoin,
+    quoteCoin: r.quoteCoin,
+    productType: r.productType,
+    minLever: r.minLever != null ? Number(r.minLever) : undefined,
+    maxLever: r.maxLever != null ? Number(r.maxLever) : undefined,
+    pricePlace: r.pricePlace != null ? Number(r.pricePlace) : undefined,
+    volumePlace: r.volumePlace != null ? Number(r.volumePlace) : undefined,
+  };
 }
 
 // ---------------------------------------------------------------------------
