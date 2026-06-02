@@ -1,10 +1,12 @@
 /**
- * TradingForm — visual-only order entry form. No engine behind it
- * yet. Mirrors the Bitget terminal's right-column form:
+ * TradingForm — order entry form. Wires the Open long/short
+ * buttons to the demo trading engine via `onPlaceMarketOrder`.
  *
- *   [Cross] [10x]   <- margin mode + leverage (single clickable row)
- *   Open           <- (Close removed; closes happen via Positions list)
- *   Limit | Market | Post only
+ * Mirrors the Bitget terminal's right-column form:
+ *
+ *   [Cross] [10x]   <- margin mode + leverage (clickable)
+ *   Open           <- (Close removed; closes via Positions list)
+ *   Limit | Market
  *   Available  X USDT
  *   Price  [____] [BBO]
  *   Quantity [____]  BTC⌄
@@ -14,33 +16,35 @@
  *   Time in force [GTC ⌄]
  *   [ Open long ]  [ Open short ]
  *   Max X BTC | X BTC
- *
- * The leverage button opens <LeverageModal> (centered modal with
- * number input + slider, mirrors Bitget's "Adjust leverage" UI).
- *
- * The Open long / Open short buttons log a placeholder for now —
- * the actual demo engine lands in a later commit.
  */
 
 import { useEffect, useMemo, useState } from "react";
 import { getContractInfo } from "../api/bitget";
 import type { PublicTrade } from "../api/bitget";
 import { LeverageModal } from "./LeverageModal";
+import type { PlaceMarketOrderParams } from "../hooks/useDemoAccount";
 
 export interface TradingFormProps {
   symbol: string;
-  /** Latest trade price from the market-trades stream, for BBO / cost preview. */
+  /** Latest trade price, used as BBO / fill price / mark. */
   latestPrice: number | null;
-  /** Latest trade object, used to display "live" price next to BBO. */
+  /** Latest trade object, kept for future use. */
   latestTrade?: PublicTrade | null;
   /** Demo balance in USDT. */
   balance: number;
+  /** Called when the user clicks Open long/short on a market order. */
+  onPlaceMarketOrder: (params: PlaceMarketOrderParams) => void;
 }
 
-type OrderType = "limit" | "market" | "post_only";
+type OrderType = "limit" | "market";
 type Tif = "GTC" | "IOC" | "FOK";
 
-export function TradingForm({ symbol, latestPrice, balance }: TradingFormProps) {
+export function TradingForm({
+  symbol,
+  latestPrice,
+  balance,
+  onPlaceMarketOrder,
+}: TradingFormProps) {
   const [leverage, setLeverage] = useState<number>(10);
   const [orderType, setOrderType] = useState<OrderType>("limit");
   const [price, setPrice] = useState<string>("");
@@ -102,10 +106,30 @@ export function TradingForm({ symbol, latestPrice, balance }: TradingFormProps) 
   };
 
   const handleSubmit = (side: "long" | "short") => {
-    // Placeholder — the demo engine lands later.
+    if (!bbo || bbo <= 0) return;
+    const q = parseFloat(quantity);
+    if (!isFinite(q) || q <= 0) return;
+
+    if (orderType === "market") {
+      // Fire the market order through the demo engine.
+      onPlaceMarketOrder({
+        symbol,
+        side,
+        size: q,
+        leverage,
+        markPrice: bbo,
+      });
+      // Clear the quantity so the next order starts fresh.
+      setQuantity("");
+      setQuantityPct(0);
+      return;
+    }
+
+    // Limit order in part 2 — for now, log a placeholder so the
+    // form is still usable while we build the limit-order trigger.
     // eslint-disable-next-line no-console
     console.log(
-      `[trading form] ${side.toUpperCase()} ${orderType} ${quantity} ${symbol} @ ${price || bbo} (${leverage}x, TIF=${tif}, TP/SL=${tpSl})`,
+      `[trading form] LIMIT ${side} ${q} ${symbol} @ ${price} (${leverage}x) — coming in part 2`,
     );
   };
 
@@ -155,7 +179,7 @@ export function TradingForm({ symbol, latestPrice, balance }: TradingFormProps) 
       {/* Order type */}
       <div className="px-3 py-2 border-b border-zinc-800">
         <div className="flex items-center gap-1 text-[11px]">
-          {(["limit", "market", "post_only"] as OrderType[]).map((t) => (
+          {(["limit", "market"] as OrderType[]).map((t) => (
             <button
               key={t}
               onClick={() => setOrderType(t)}
@@ -166,7 +190,7 @@ export function TradingForm({ symbol, latestPrice, balance }: TradingFormProps) 
                   : "text-zinc-500 hover:text-zinc-300",
               ].join(" ")}
             >
-              {t === "post_only" ? "Post only" : t === "limit" ? "Limit" : "Market"}
+              {t === "limit" ? "Limit" : "Market"}
             </button>
           ))}
           <span className="ml-auto text-zinc-600">ⓘ</span>

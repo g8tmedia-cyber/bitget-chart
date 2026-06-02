@@ -25,6 +25,7 @@ import { AccountPanel } from "./components/AccountPanel";
 import { BottomPanel } from "./components/BottomPanel";
 import { useChartData } from "./hooks/useChartData";
 import { useTicker } from "./hooks/useTicker";
+import { useDemoAccount } from "./hooks/useDemoAccount";
 import {
   DEFAULT_TIMEFRAME,
   timeframeByLabel,
@@ -40,9 +41,7 @@ const TF_STORAGE_KEY = "btcusdt-timeframe";
 const SCALE_MODE_STORAGE_KEY = "btcusdt-scale-mode";
 const TZ_ID_STORAGE_KEY = "btcusdt-tz-id";
 const SYMBOL_STORAGE_KEY = "btcusdt-symbol";
-const BALANCE_STORAGE_KEY = "btcusdt-demo-balance";
 const DEFAULT_TZ_ID = "UTC";
-const DEFAULT_BALANCE = 10_000;
 
 const VALID_SCALE_MODES: ScaleMode[] = ["auto", "log", "percent"];
 
@@ -54,19 +53,6 @@ function loadInitialSymbol(): string {
     // fall through
   }
   return DEFAULT_SYMBOL;
-}
-
-function loadInitialBalance(): number {
-  try {
-    const saved = localStorage.getItem(BALANCE_STORAGE_KEY);
-    if (saved) {
-      const n = Number(saved);
-      if (Number.isFinite(n) && n >= 0) return n;
-    }
-  } catch {
-    // fall through
-  }
-  return DEFAULT_BALANCE;
 }
 
 function loadInitialScaleMode(): ScaleMode {
@@ -109,9 +95,9 @@ function App() {
   });
   const [scaleMode, setScaleMode] = useState<ScaleMode>(loadInitialScaleMode);
   const [tzId, setTzId] = useState<string>(loadInitialTzId);
-  const [balance, setBalance] = useState<number>(loadInitialBalance);
   const state = useChartData(symbol, tf);
   const { ticker } = useTicker(symbol);
+  const demo = useDemoAccount();
 
   // The chart's last close — single source of truth for both the
   // browser-tab price and the trading form's BBO. Pulled from the
@@ -151,14 +137,6 @@ function App() {
     }
   }, [tzId]);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(BALANCE_STORAGE_KEY, String(balance));
-    } catch {
-      // ignore
-    }
-  }, [balance]);
-
   // Live document title — same number as the chart's C.
   useEffect(() => {
     document.title = formatTitle(latestClose, symbol);
@@ -192,11 +170,13 @@ function App() {
             <TradingForm
               symbol={symbol}
               latestPrice={latestClose}
-              balance={balance}
+              balance={demo.state.balance}
+              onPlaceMarketOrder={demo.placeMarketOrder}
             />
             <AccountPanel
-              balance={balance}
-              onBalanceChange={setBalance}
+              balance={demo.state.balance}
+              positions={demo.state.positions}
+              markPrice={latestClose}
             />
           </aside>
         </div>
@@ -205,7 +185,14 @@ function App() {
             Position history. Full width, below the 3-col row. The
             page scrolls if this drops below the viewport. */}
         <div className="h-[320px] shrink-0">
-          <BottomPanel />
+          <BottomPanel
+            positions={demo.state.positions}
+            history={demo.state.history}
+            markPrice={latestClose}
+            symbol={symbol}
+            onClosePosition={(id) => demo.closePosition(id, latestClose ?? 0)}
+            onReset={demo.reset}
+          />
         </div>
       </main>
     </div>
