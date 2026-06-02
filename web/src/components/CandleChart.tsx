@@ -38,7 +38,7 @@ import {
   type Time,
 } from "lightweight-charts";
 import type { Candle } from "../api/types";
-import { formatUsdt, liquidationPrice, type Position } from "../lib/types-demo";
+import { formatUsdt, liquidationPrice, unrealizedPnl, unrealizedRoiPct, type Position } from "../lib/types-demo";
 
 export type ScaleMode = "auto" | "log" | "percent";
 export type ChartType = "candle" | "line";
@@ -274,6 +274,11 @@ export function CandleChart({
   // --- Position lines (entry + liquidation) ----------------------------
   // Only on the candlestick view. Add new positions, remove closed
   // ones, and clear everything when switching to line preview.
+  // The entry line's right-axis label includes the live PnL +
+  // ROI, so it ticks on every mark-price change (the lightweight-
+  // charts price line has no `applyOptions`, so we recreate the
+  // entry line when the PnL changes — same pattern as the latest-
+  // price line above).
   useEffect(() => {
     const series = seriesRef.current;
     if (!series) return;
@@ -313,6 +318,22 @@ export function CandleChart({
     for (const pos of current) {
       if (positionLinesRef.current.has(pos.id)) continue;
 
+      // Live PnL suffix for the entry line's axis label. With no
+      // mark price yet (chart still loading) the suffix is empty.
+      let pnlSuffix = "";
+      if (latestPrice != null && latestPrice > 0) {
+        const pnl = unrealizedPnl(pos, latestPrice);
+        const roi = unrealizedRoiPct(pos, latestPrice);
+        const sign = pnl >= 0 ? "+" : "−";
+        const absPnl = Math.abs(pnl);
+        const pnlStr =
+          absPnl >= 1000
+            ? `${sign}$${(absPnl / 1000).toFixed(2)}k`
+            : `${sign}$${absPnl.toFixed(2)}`;
+        const roiStr = `${sign}${Math.abs(roi).toFixed(2)}%`;
+        pnlSuffix = `  ${pnlStr} (${roiStr})`;
+      }
+
       const entryColor = pos.side === "long" ? "#10b981" : "#ef4444";
       const entryLine = series.createPriceLine({
         price: pos.entryPrice,
@@ -320,7 +341,7 @@ export function CandleChart({
         lineWidth: 1,
         lineStyle: 0, // solid
         axisLabelVisible: true,
-        title: `${pos.side === "long" ? "Long" : "Short"} ${pos.size.toFixed(4)} @ ${formatUsdt(pos.entryPrice)}`,
+        title: `${pos.side === "long" ? "Long" : "Short"} ${pos.size.toFixed(4)} @ ${formatUsdt(pos.entryPrice)}${pnlSuffix}`,
       });
 
       const liq = liquidationPrice(pos);
@@ -338,7 +359,7 @@ export function CandleChart({
         liq: liqLine,
       });
     }
-  }, [positions, chartType]);
+  }, [positions, chartType, latestPrice]);
 
   // --- Price scale mode (auto | log | percent) -------------------------
   useEffect(() => {
