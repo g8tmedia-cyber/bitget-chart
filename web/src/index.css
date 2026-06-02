@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+/* Dark mode is the only mode for this app — we ship dark by default. */
+:root {
+  color-scheme: dark;
+}
+
+/* Custom scrollbar so the chart toolbar doesn't look like a webpage */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(63 63 70 / 0.6); /* zinc-700/60 */
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(82 82 91 / 0.8); /* zinc-600/80 */
+}
