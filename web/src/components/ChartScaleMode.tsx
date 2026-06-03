@@ -1,16 +1,17 @@
 /**
  * ChartScaleMode — bottom-right scale controls.
  *
- * Two buttons:
+ * Three buttons:
  *   - %      : percentage (each bar shown as % change from a reference)
  *   - log    : toggle between logarithmic and linear (auto) scale.
  *              Clicking while in log → switch to linear. Clicking
  *              while in linear (or percent) → switch to log.
+ *   - auto   : explicit "linear + auto-fit" mode (re-fits the
+ *              time scale and autoscales the price scale).
  *
- * Note: the underlying "linear" mode is `auto` in our ScaleMode
- * type — same chart behavior, just a different label for the
- * user. The toggle preserves the auto-fit behavior of `auto`
- * (handled by ChartPane).
+ * The log/auto pair behave as a toggle: log ↔ auto. % is its
+ * own thing. auto is also reachable directly for users who
+ * want to be explicit about resetting the chart.
  */
 
 export type ScaleMode = "auto" | "log" | "percent";
@@ -22,7 +23,7 @@ export interface ChartScaleModeProps {
 
 export function ChartScaleMode({ value, onChange }: ChartScaleModeProps) {
   const handleLogToggle = () => {
-    // log ↔ auto. If currently on percent, fall through to log.
+    // log ↔ auto. From percent, jump straight to log.
     onChange(value === "log" ? "auto" : "log");
   };
 
@@ -51,6 +52,18 @@ export function ChartScaleMode({ value, onChange }: ChartScaleModeProps) {
         title={value === "log" ? "Switch to linear" : "Switch to logarithmic"}
       >
         log
+      </button>
+      <button
+        onClick={() => onChange("auto")}
+        className={[
+          "px-2 py-1 transition-colors",
+          value === "auto"
+            ? "bg-zinc-100 text-zinc-900"
+            : "text-zinc-400 hover:text-zinc-100",
+        ].join(" ")}
+        title="Linear (auto-fit)"
+      >
+        auto
       </button>
     </div>
   );
