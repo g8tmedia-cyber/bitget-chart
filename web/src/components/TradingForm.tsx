@@ -117,7 +117,6 @@ export function TradingForm({
     if (!isFinite(q) || q <= 0) return;
 
     if (orderType === "market") {
-      // Fire the market order through the demo engine.
       onPlaceMarketOrder({
         symbol,
         side,

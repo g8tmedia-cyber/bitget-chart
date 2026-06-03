@@ -17,6 +17,7 @@
  */
 
 import {
+  accountEquity,
   formatUsdt,
   type Position,
   unrealizedPnl,
@@ -34,7 +35,7 @@ export function AccountPanel({ balance, positions, markPrice }: AccountPanelProp
     markPrice == null
       ? 0
       : positions.reduce((sum, p) => sum + unrealizedPnl(p, markPrice), 0);
-  const equity = balance + totalUnrealized;
+  const equity = accountEquity(balance, positions, markPrice);
   const roi = balance > 0 ? (totalUnrealized / balance) * 100 : 0;
 
   return (

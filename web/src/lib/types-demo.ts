@@ -105,6 +105,34 @@ export function formatUsdt(n: number, maxFractionDigits: number = 2): string {
 }
 
 /**
+ * Total account equity — what the demo is worth right now if
+ * you closed every open position at the current mark price.
+ *
+ *   equity = free balance
+ *          + sum of locked margin across all open positions
+ *          + sum of unrealized PnL across all open positions
+ *
+ * Without a mark price the unrealized PnL can't be computed
+ * (we'd be marking each position at its own entry price, which
+ * means PnL = 0), so we return `balance + totalMargin` — the
+ * value the account would have if every position were closed
+ * right now at its entry.
+ */
+export function accountEquity(
+  balance: number,
+  positions: Position[],
+  markPrice: number | null,
+): number {
+  const totalMargin = positions.reduce((s, p) => s + p.margin, 0);
+  if (markPrice == null) return balance + totalMargin;
+  const totalUnrealized = positions.reduce(
+    (s, p) => s + unrealizedPnl(p, markPrice),
+    0,
+  );
+  return balance + totalMargin + totalUnrealized;
+}
+
+/**
  * Decide whether a limit order should fill on this candle. Pure
  * function — exports so the trigger can be unit-tested.
  *

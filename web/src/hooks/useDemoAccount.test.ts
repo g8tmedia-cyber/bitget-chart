@@ -21,6 +21,7 @@ import {
   applyMarketFill,
 } from "../hooks/useDemoAccount";
 import {
+  accountEquity,
   formatUsdt,
   liquidationPrice,
   shouldFillLimitOrder,
@@ -430,5 +431,61 @@ describe("formatUsdt", () => {
   it("respects the maxFractionDigits option", () => {
     expect(formatUsdt(1234.5678, 2)).toBe("1,234.57");
     expect(formatUsdt(1234.5678, 0)).toBe("1,235");
+  });
+});
+
+// --- Account equity ---------------------------------------------------------
+
+describe("accountEquity", () => {
+  it("returns just the balance with no positions", () => {
+    expect(accountEquity(10_000, [], 67_000)).toBe(10_000);
+  });
+
+  it("returns just the balance with no mark price (no PnL possible)", () => {
+    const pos: Position = freshPosition({ margin: 674.02 });
+    expect(accountEquity(9_325.98, [pos], null)).toBe(10_000);
+  });
+
+  it("includes the locked margin when positions are open", () => {
+    const pos: Position = freshPosition({ margin: 674.02 });
+    // balance + margin, no PnL since mark == entry
+    expect(accountEquity(9_325.98, [pos], 67_000)).toBeCloseTo(10_000, 6);
+  });
+
+  it("includes the unrealized PnL on top of margin + balance", () => {
+    const pos: Position = freshPosition({
+      side: "long",
+      entryPrice: 67_000,
+      size: 0.1,
+      leverage: 10,
+      margin: 674.02,
+    });
+    // balance 9325.98 + margin 674.02 + PnL (67500-67000)*0.1=50
+    // = 10,050.00
+    expect(accountEquity(9_325.98, [pos], 67_500)).toBeCloseTo(10_050, 2);
+  });
+
+  it("sums across multiple positions (long + short)", () => {
+    const long: Position = freshPosition({
+      side: "long", entryPrice: 67_000, size: 0.1, leverage: 10, margin: 674.02,
+    });
+    const short: Position = freshPosition({
+      id: "pos-2",
+      side: "short", entryPrice: 67_000, size: 0.1, leverage: 10, margin: 674.02,
+    });
+    // both at entry, no PnL → balance + sum(margins) = 9325.98 + 1348.04
+    expect(accountEquity(9_325.98, [long, short], 67_000)).toBeCloseTo(
+      10_674.02,
+      2,
+    );
+  });
+
+  it("handles a loss correctly", () => {
+    const pos: Position = freshPosition({
+      side: "long", entryPrice: 67_000, size: 0.1, leverage: 10, margin: 674.02,
+    });
+    // balance + margin + PnL (66500-67000)*0.1 = -50
+    // = 9325.98 + 674.02 - 50 = 9950
+    expect(accountEquity(9_325.98, [pos], 66_500)).toBeCloseTo(9_950, 2);
   });
 });
